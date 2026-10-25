@@ -37,53 +37,12 @@ def contact(when, result="Neutral", contact_id="contact-1", follow_up=""):
     }
 
 
-def email_rows(
-    *, kind="stockfiller", proposal_type="reminder", customer_id="cid-1",
-    number="100", name="Butik",
-):
-    message = {
-        "email_id": "email-1", "customer_id": customer_id,
-        "customer_number": number, "customer": name, "sent_at": "2026-08-01 09:00:00",
-        "status": "sent", "is_test": "N",
-        "email_type": proposal_type,
-    }
-    recipient = {
-        "email_id": "email-1", "send_status": "sent",
-        "intended_email": "buyer@example.com", "actual_email": "buyer@example.com",
-    }
-    if kind == "stockfiller":
-        recipient.update({
-            "stockfiller_click_count": "2",
-            "stockfiller_first_clicked_at": "2026-08-02 10:00:00",
-            "stockfiller_last_clicked_at": "2026-08-03 11:00:00",
-        })
-    elif kind == "product":
-        recipient.update({
-            "product_sheet_click_count": "1",
-            "product_sheet_first_clicked_at": "2026-08-02 10:00:00",
-            "product_sheet_last_clicked_at": "2026-08-02 10:00:00",
-        })
-    elif kind == "open":
-        recipient.update({
-            "open_count": "1",
-            "first_opened_at": "2026-08-02 10:00:00",
-            "last_opened_at": "2026-08-02 10:00:00",
-        })
-    elif kind == "delivered":
-        recipient.update({"delivered_at": "2026-08-02 10:00:00"})
-    return [message], [recipient]
-
-
-def scored(*, today, orders=(), contacts=(), email_feature=None, customers=None, planned=()):
+def scored(*, today, orders=(), contacts=(), customers=None, planned=()):
     customers = customers or [customer()]
     order_features = build_order_features(list(orders))
-    email_features = {}
-    if email_feature:
-        email_features = {"id:cid-1": email_feature}
     return build_priority_customers(
         customers, order_features, build_contact_features(list(contacts), order_features),
-        "Olle", today, limit=len(customers), email_features=email_features,
-        planned_activities=list(planned),
+        "Olle", today, limit=len(customers), planned_activities=list(planned),
     )
 
 
@@ -96,12 +55,12 @@ def suggestion_identity(item):
         latest_contact_id=item["latest_human_contact_id"],
         latest_contact_result=item["latest_contact_result"],
         latest_contact_date=item["latest_human_contact_date"],
-        active_email_intent_event=item["active_email_intent_event"],
+
     )
     return context, deterministic_suggestion_id("olle", item["customer_id"], context)
 
 
-class Phase4EmailIntentTests(TestCase):
+class Phase4PriorityContinuityTests(TestCase):
     def test_superseded_plan_does_not_change_priority_or_scoring(self):
         baseline = scored(today=date(2026, 8, 2))[0]
         with_history = scored(today=date(2026, 8, 2), planned=[{
@@ -113,221 +72,11 @@ class Phase4EmailIntentTests(TestCase):
         }])[0]
         self.assertEqual(with_history, baseline)
 
-    def snapshot(self, kind, today=date(2026, 8, 2), customers=None):
-        messages, recipients = email_rows(kind=kind)
-        result = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=today, customers=customers or [customer()]
-        )
-        return result["id:cid-1"]
-
-    def test_stockfiller_and_product_clicks_apply_exact_modifiers_immediately(self):
-        baseline = scored(today=date(2026, 8, 2))[0]
-        stock = scored(today=date(2026, 8, 5), email_feature=self.snapshot("stockfiller", date(2026, 8, 5)))[0]
-        product = scored(today=date(2026, 8, 5), email_feature=self.snapshot("product", date(2026, 8, 5)))[0]
-
-        self.assertEqual(stock["intent_timing"], round(100 * (stock)["work_contact_factor"]))
-        self.assertEqual(product["intent_timing"], round(100 * (product)["work_contact_factor"]))
-        self.assertEqual(stock["primary_trigger_type"], "stockfiller_click_followup")
-        self.assertEqual(product["primary_trigger_type"], "product_sheet_click_followup")
-        self.assertEqual(self.snapshot("stockfiller", date(2026, 8, 5))["email_followup_wait_days_remaining"], 0)
-
-    def test_stockfiller_click_precedes_product_sheet_click(self):
-        messages, recipients = email_rows(kind="stockfiller")
-        recipients[0].update({
-            "product_sheet_click_count": "1",
-            "product_sheet_first_clicked_at": "2026-08-02 09:00:00",
-            "product_sheet_last_clicked_at": "2026-08-02 09:00:00",
-        })
-        snapshot = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=date(2026, 8, 5), customers=[customer()]
-        )["id:cid-1"]
-        item = scored(today=date(2026, 8, 5), email_feature=snapshot)[0]
-        self.assertEqual(item["primary_trigger_type"], "stockfiller_click_followup")
-
-    def test_waiting_click_has_no_modifier_or_trigger(self):
-        feature = self.snapshot("stockfiller")
-        feature["email_followup_wait_days_remaining"] = 1
-        baseline = scored(today=date(2026, 8, 2))[0]
-        waiting = scored(today=date(2026, 8, 2), email_feature=feature)[0]
-        self.assertEqual(waiting["intent_timing"], round(100 * (waiting)["work_contact_factor"]))
-        self.assertNotIn("stockfiller_click_followup", waiting["covered_trigger_keys"])
-        ready = scored(
-            today=date(2026, 8, 5),
-            email_feature=self.snapshot("stockfiller", date(2026, 8, 5)),
-        )[0]
-        self.assertEqual(waiting["active_email_intent_event"], ready["active_email_intent_event"])
-        identities = []
-        for item in (waiting, ready):
-            context = decision_context_hash(
-                owner="olle", customer_id=item["customer_id"],
-                lifecycle=item["decision_context_lifecycle"], order_count=item["order_count"],
-                latest_order_reference=item["latest_order_reference"],
-                latest_order_date=item["latest_delivery_date"],
-                latest_contact_id=item["latest_human_contact_id"],
-                latest_contact_result=item["latest_contact_result"],
-                latest_contact_date=item["latest_human_contact_date"],
-                active_email_intent_event=item["active_email_intent_event"],
-            )
-            identities.append((context, deterministic_suggestion_id("olle", "cid-1", context)))
-        self.assertEqual(identities[0], identities[1])
-
-    def test_open_never_becomes_actionable_or_suppresses_contact(self):
-        baseline = scored(today=date(2026, 8, 2))[0]
-        opened = scored(today=date(2026, 8, 2), email_feature=self.snapshot("open"))[0]
-        self.assertEqual(opened["intent_timing"], round(100 * (opened)["work_contact_factor"]))
-        self.assertNotIn("email", opened["primary_trigger_type"])
-        self.assertFalse(opened["active_email_intent_event"])
-        self.assertEqual(
-            opened["recommendation_suppression_reason"],
-            "",
-        )
-        ready = scored(
-            today=date(2026, 8, 12),
-            email_feature=self.snapshot("open", date(2026, 8, 12)),
-        )[0]
-        self.assertNotIn("email", ready["primary_trigger_type"])
-        self.assertEqual(ready["intent_timing"], round(100 * (ready)["work_contact_factor"]))
-        self.assertEqual(
-            opened["active_email_intent_event"], ready["active_email_intent_event"]
-        )
-        delivered = scored(today=date(2026, 8, 2), email_feature=self.snapshot("delivered"))[0]
-        self.assertEqual(delivered["intent_timing"], round(100 * (delivered)["work_contact_factor"]))
-        self.assertEqual(delivered["active_email_intent_event"], "")
-
-    def test_email_modifier_changes_only_intent_and_score_components_stay_business_based(self):
-        baseline = scored(today=date(2026, 8, 5))[0]
-        clicked = scored(
-            today=date(2026, 8, 5),
-            email_feature=self.snapshot("stockfiller", date(2026, 8, 5)),
-        )[0]
-        for field in ("value_index", "strategic_index", "expected_order_dfp"):
-            self.assertEqual(clicked[field], baseline[field])
-        self.assertEqual(clicked["intent_timing"], round(100 * (clicked)["work_contact_factor"]))
-
-    def test_separate_click_event_changes_context_event_identity(self):
-        first = self.snapshot("stockfiller", date(2026, 8, 5))
-        messages, recipients = email_rows(kind="stockfiller")
-        messages[0]["email_id"] = "email-2"
-        recipients[0]["email_id"] = "email-2"
-        recipients[0]["stockfiller_first_clicked_at"] = "2026-08-06 10:00:00"
-        recipients[0]["stockfiller_last_clicked_at"] = "2026-08-06 10:00:00"
-        second_snapshot = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=date(2026, 8, 9), customers=[customer()]
-        )["id:cid-1"]
-        first_item = scored(today=date(2026, 8, 5), email_feature=first)[0]
-        second_item = scored(today=date(2026, 8, 9), email_feature=second_snapshot)[0]
-        self.assertNotEqual(
-            first_item["active_email_intent_event"], second_item["active_email_intent_event"]
-        )
-
-    def test_future_activity_and_explicit_followup_suppress_click(self):
-        feature = self.snapshot("stockfiller", date(2026, 8, 5))
-        with_activity = scored(
-            today=date(2026, 8, 5), email_feature=feature,
-            planned=[{
-                "planned_activity_id": "future", "customer_id": "cid-1",
-                "customer": "Butik", "status": "planned",
-                "scheduled_at": "2026-08-10 09:00:00",
-            }],
-        )[0]
-        explicit = contact("2026-08-01 10:00:00", follow_up="2026-08-10")
-        with_followup = scored(
-            today=date(2026, 8, 5), contacts=[explicit], email_feature=feature
-        )[0]
-        self.assertEqual(with_activity["recommendation_suppression_reason"], "future_planned_activity")
-        self.assertEqual(
-            with_activity["recommendation_suppression_source_type"],
-            "planned_activity",
-        )
-        self.assertEqual(
-            with_activity["recommendation_suppression_source_id"], "future"
-        )
-        self.assertEqual(with_followup["recommendation_suppression_reason"], "future_follow_up_date")
-        self.assertNotIn("stockfiller_click_followup", with_activity["covered_trigger_keys"])
-        self.assertNotIn("stockfiller_click_followup", with_followup["covered_trigger_keys"])
-
-    def test_click_event_and_context_are_stable_as_time_passes(self):
-        early_feature = self.snapshot("stockfiller", date(2026, 8, 5))
-        later_feature = self.snapshot("stockfiller", date(2026, 8, 20))
-        early = scored(today=date(2026, 8, 5), email_feature=early_feature)[0]
-        later = scored(today=date(2026, 8, 20), email_feature=later_feature)[0]
-        self.assertEqual(early["active_email_intent_event"], later["active_email_intent_event"])
-        hashes = []
-        for item in (early, later):
-            context = decision_context_hash(
-                owner="olle", customer_id=item["customer_id"],
-                lifecycle=item["decision_context_lifecycle"], order_count=item["order_count"],
-                latest_order_reference=item["latest_order_reference"],
-                latest_order_date=item["latest_delivery_date"],
-                latest_contact_id=item["latest_human_contact_id"],
-                latest_contact_result=item["latest_contact_result"],
-                latest_contact_date=item["latest_human_contact_date"],
-                active_email_intent_event=item["active_email_intent_event"],
-            )
-            hashes.append((context, deterministic_suggestion_id("olle", "cid-1", context)))
-        self.assertEqual(hashes[0], hashes[1])
-
-    def test_later_order_or_human_contact_handles_click(self):
-        feature = self.snapshot("stockfiller", date(2026, 8, 5))
-        after_order = scored(
-            today=date(2026, 8, 8), orders=[order("O-1", "2026-08-03")],
-            email_feature=feature,
-        )[0]
-        after_contact = scored(
-            today=date(2026, 8, 8), contacts=[contact("2026-08-03 12:00:00")],
-            email_feature=feature,
-        )[0]
-        self.assertEqual(after_order["active_email_intent_event"], "")
-        self.assertEqual(after_contact["active_email_intent_event"], "")
-
-    def test_email_precedes_reorder_but_covered_keys_include_both(self):
-        feature = self.snapshot("stockfiller", date(2026, 8, 5))
-        item = scored(
-            today=date(2026, 8, 8),
-            orders=[order("O-1", "2026-06-01"), order("O-2", "2026-06-21")],
-            email_feature=feature,
-        )[0]
-        self.assertEqual(item["primary_trigger_type"], "stockfiller_click_followup")
-        self.assertIn("stockfiller_click_followup", item["covered_trigger_keys"])
-
-    def test_same_name_email_binds_only_to_matching_canonical_customer(self):
-        customers = [
-            customer("cid-1", "100", "Samma", row=2),
-            customer("cid-2", "200", "Samma", row=3),
-        ]
-        messages, recipients = email_rows(name="Samma")
-        snapshot = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=date(2026, 8, 5), customers=customers
-        )
-        result = scored(
-            today=date(2026, 8, 5), customers=customers,
-            email_feature=snapshot["id:cid-1"],
-        )
-        by_id = {item["customer_id"]: item for item in result}
-        self.assertEqual(by_id["cid-1"]["primary_trigger_type"], "stockfiller_click_followup")
-        self.assertEqual(by_id["cid-2"]["primary_trigger_type"], "value_based_contact_due")
-        self.assertFalse(by_id["cid-2"]["active_email_intent_event"])
-
-    def test_renamed_customer_keeps_email_intent_by_customer_id(self):
-        messages, recipients = email_rows(name="Gammalt namn")
-        master = customer(name="Nytt namn")
-        snapshot = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=date(2026, 8, 5), customers=[master]
-        )["id:cid-1"]
-        item = scored(
-            today=date(2026, 8, 5), customers=[master], email_feature=snapshot
-        )[0]
-        self.assertEqual(item["primary_trigger_type"], "stockfiller_click_followup")
-
 
 class Phase4LegacyFollowupTests(TestCase):
 
 
-    def test_future_explicit_followup_still_blocks_email_and_positive(self):
-        ready = app_module.build_email_engagement_snapshot(
-            *email_rows(kind="stockfiller"), [], today=date(2026, 8, 5),
-            customers=[customer()],
-        )["id:cid-1"]
+    def test_future_explicit_followup_still_blocks_positive_dialogue(self):
         future_positive = contact(
             "2026-07-16 10:00:00", result="Positiv",
             contact_id="future-positive", follow_up="2026-08-10",
@@ -341,7 +90,7 @@ class Phase4LegacyFollowupTests(TestCase):
         )[0]
         item = scored(
             today=date(2026, 8, 5), contacts=[future_positive],
-            email_feature=ready,
+
         )[0]
         self.assertEqual(item["recommendation_suppression_reason"], "future_follow_up_date")
         self.assertNotIn("stockfiller_click_followup", item["covered_trigger_keys"])

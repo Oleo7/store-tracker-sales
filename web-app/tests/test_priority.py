@@ -38,7 +38,6 @@ TODAY = date(2026, 5, 6)
 class PriorityTests(TestCase):
     def setUp(self):
         app_module.app.config.update(TESTING=True, SECRET_KEY="priority-test-secret")
-        app_module._email_sheets_cache = None
         current_user_patcher = patch.object(
             app_module,
             "current_user",
@@ -429,17 +428,11 @@ class PriorityTests(TestCase):
                 "warm_lead",
                 "retry",
                 "negative_reactivation",
-                "stockfiller_click_followup",
-                "product_sheet_click_followup",
             },
             "avvakta": {
                 "scheduled_followup",
                 "monitor",
                 "pause",
-                "email_order_monitor",
-                "email_click_wait",
-                "email_open_wait",
-                "email_delivery_wait",
                 "unknown",
                 None,
             },
@@ -1300,7 +1293,7 @@ class PriorityTests(TestCase):
             {"besök", "telefon", "email", "avvakta"},
         )
 
-    def test_due_email_proposal_does_not_override_visit_recommendations(self):
+    def test_non_email_insights_preserve_visit_recommendations(self):
         customers = [
             [
                 "customer",
@@ -1371,7 +1364,7 @@ class PriorityTests(TestCase):
             with self.subTest(action_type=action_type):
                 insight = insights[customer_key]
                 self.assertEqual(insight["next_action"]["action_type"], action_type)
-                self.assertTrue(insight["email_proposal_due"])
+                self.assertNotIn("email_proposal_due", insight)
                 self.assertEqual(insight["recommended_channel"], "besök")
                 self.assertEqual(insight["next_action"]["contact_type"], "visit")
                 self.assertTrue(insight["next_action"]["can_contact_now"])

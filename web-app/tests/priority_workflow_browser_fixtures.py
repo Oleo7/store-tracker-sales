@@ -14,7 +14,6 @@ def install_priority_workflow_fixtures(app_module, spreadsheet):
             else:
                 spreadsheet.sheets[name].values = deepcopy(baseline[name])
         app_module._sheet_read_cache.clear()
-        app_module._email_sheets_cache = None
 
     @app_module.app.post("/__test__/priority-workflow")
     def priority_workflow_fixture():

@@ -26,7 +26,6 @@ import gc
 import gzip
 from priority_read_cache import freeze, next_time_transition, compact_records, ReadSingleFlight
 from io import BytesIO
-from queue import Empty, Full, Queue
 import os
 import json
 import hashlib
@@ -127,42 +126,9 @@ from route_optimization import (
     parse_optimize_tours_response,
     quadratic_soft_duration_diagnostics,
 )
-from reminder_email import (
-    EMAIL_PROPOSAL_PRODUCT_SETTINGS,
-    EMAIL_PROPOSAL_TEMPLATE_FIELDS,
-    EMAIL_PROPOSAL_TYPES,
-    EMAIL_EVENTS_COLUMNS,
-    EMAIL_MESSAGES_COLUMNS,
-    EMAIL_RECIPIENTS_COLUMNS,
-    SETTINGS_COLUMNS,
-    USER_COLUMNS,
-    brevo_event_time,
-    build_email_proposal_copy,
-    build_email_proposal_template_defaults,
-    build_new_customer_order_rows,
-    build_reactivation_order_rows,
-    build_settings_product_catalog,
-    canonicalize_proposal_order_rows,
-    build_latest_order_context,
-    classify_customer_relationship,
-    classify_clicked_url,
-    count_unique_order_customers,
-    first_name,
-    email_event_key,
-    is_valid_email,
-    is_yes,
-    normalize_brevo_event,
-    normalize_email,
-    normalize_message_id,
-    normalize_proposal_type,
-    round_store_count_to_ten,
-    render_email_proposal,
-    recipient_greeting_name,
-    safe_http_url,
-    split_email_values,
-    stockholm_now,
-    stockholm_time_text,
-    stockholm_today,
+from crm_utils import (
+    USER_COLUMNS, SETTINGS_COLUMNS, is_yes,
+    split_email_values, stockholm_now, stockholm_today, stockholm_time_text,
 )
 from planning_suggestions import (
     PlanningSuggestionService,
@@ -179,7 +145,6 @@ from planning_suggestions import (
     public_suggestion,
 )
 from sheets_availability import SheetReadCache, read_with_retry
-
 
 
 LOCAL_SESSION_SECRET = "store-tracker-local-session"
@@ -404,10 +369,8 @@ PERFORMANCE_ENDPOINTS = {
     "/followup-insights",
     "/sales-coaching-insights",
     "/sales-coaching-insights/drilldown",
-    "/customers/<int:row>/email-proposal-draft",
-    "/customers/<int:row>/reminder-email-draft",
-    "/customers/<int:row>/email-proposal/send",
-    "/customers/<int:row>/reminder-email/send",
+
+
     "/customers/<path:customer_name>/contacts",
     "/planning/attention",
     "/planning/activities",
@@ -422,16 +385,15 @@ PERFORMANCE_ENDPOINTS = {
     "/planning/route-preview",
     "/planning/route-preview-status",
     "/route-proposal",
-    "/api/brevo/reconcile/<secret>",
+
     "/customers/<path:customer_name>/stats",
 }
 PERFORMANCE_SHEETS = {
     "customers_enriched",
     "sales_activities",
     "order_rows",
-    "email_messages",
-    "email_recipients",
-    "email_events",
+
+
     "planned_activities",
     "planning_suggestions",
     "score_events",
@@ -660,9 +622,6 @@ CONTACT_COLUMNS = ["date_time", "sales_person", "customer", "customer_id", "cont
 CONTACT_REQUIRED_COLUMNS = ["date_time", "sales_person", "customer", "contact_channel",
                             "result", "comment", "customer_contact_person", "follow_up_date"]
 
-EMAIL_MESSAGES_SHEET = "email_messages"
-EMAIL_RECIPIENTS_SHEET = "email_recipients"
-EMAIL_EVENTS_SHEET = "email_events"
 USERS_SHEET = "users"
 SETTINGS_SHEET = "settings"
 # LEGACY/ROLLBACK COMPATIBILITY: the list-view proposal flow is retired.
@@ -764,40 +723,9 @@ PLANNING_SOURCES = {"manual", "follow_up", "route", "system_suggestion"}
 PLANNING_PREVIEW_MAX_AGE_SECONDS = 30 * 60
 PLANNING_ROUTE_START_HOUR = WORKDAY_START.hour
 STOCKHOLM_ZONE = ZoneInfo("Europe/Stockholm")
-BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email"
-BREVO_EVENTS_URL = "https://api.brevo.com/v3/smtp/statistics/events"
-EMAIL_SEND_MODE = (os.environ.get("EMAIL_SEND_MODE") or "test").strip().casefold()
-EMAIL_TEST_RECIPIENT = (os.environ.get("EMAIL_TEST_RECIPIENT") or "olle@eatpolarbar.com").strip()
-BREVO_RECONCILE_INTERVAL_SECONDS = max(
-    60, int(os.environ.get("BREVO_RECONCILE_INTERVAL_SECONDS") or 900)
-)
-BREVO_RECONCILE_DAYS = max(1, min(30, int(os.environ.get("BREVO_RECONCILE_DAYS") or 3)))
-BREVO_RECONCILE_MAX_RECIPIENTS = max(
-    1, min(500, int(os.environ.get("BREVO_RECONCILE_MAX_RECIPIENTS") or 100))
-)
-EMAIL_PROPOSAL_RECENT_DELIVERY_DAYS = 60
-EMAIL_PROPOSAL_GRACE_DAYS = 7
-EMAIL_PROPOSAL_CONTACT_COOLDOWN_DAYS = 7
-EMAIL_PROPOSAL_SENT_COOLDOWN_DAYS = 10
-EMAIL_ORDER_ATTRIBUTION_DAYS = 10
-EMAIL_CLICK_FOLLOWUP_WAIT_DAYS = 3
-EMAIL_OPEN_FOLLOWUP_WAIT_DAYS = 10
 PLANNING_SUGGESTION_PREVIEW_DEFAULT = 10
 ANCHOR_ROUTE_CANDIDATE_LIMIT = 35
 # Backward-compatible names used by older tests and integrations.
-REMINDER_EMAIL_GRACE_DAYS = EMAIL_PROPOSAL_GRACE_DAYS
-REMINDER_EMAIL_CONTACT_COOLDOWN_DAYS = EMAIL_PROPOSAL_CONTACT_COOLDOWN_DAYS
-REMINDER_EMAIL_SENT_COOLDOWN_DAYS = EMAIL_PROPOSAL_SENT_COOLDOWN_DAYS
-_active_send_ids = set()
-_active_send_lock = threading.Lock()
-_brevo_event_queue = Queue(maxsize=1000)
-_brevo_worker_start_lock = threading.Lock()
-_brevo_workers_started = False
-_brevo_processing_lock = threading.Lock()
-_brevo_reconcile_lock = threading.Lock()
-_email_sheets_cache = None
-_email_sheets_cache_lock = threading.Lock()
-_settings_write_lock = threading.Lock()
 _worksheet_append_lock = threading.RLock()
 _route_provider_lock = threading.Lock()
 _route_provider = None
@@ -891,9 +819,8 @@ READ_CACHE_TITLES = {
     "order_rows",
     "sales_activities",
     "users",
-    "email_messages",
-    "email_recipients",
-    "email_events",
+
+
     "planned_activities",
     "planning_suggestions",
     "score_events",
@@ -905,8 +832,8 @@ PRIORITY_SNAPSHOT_CACHE_TITLES = frozenset({
     "users",
     "order_rows",
     "sales_activities",
-    "email_messages",
-    "email_recipients",
+
+
     "planned_activities",
 })
 
@@ -1111,12 +1038,11 @@ def build_worksheet_row(headers, row_data, single_value_columns=None):
 
 
 def get_spreadsheet(force_reconnect=False):
-    global _spreadsheet_cache, _email_sheets_cache
+    global _spreadsheet_cache
     if _spreadsheet_cache is None or force_reconnect:
         if force_reconnect:
             _sheet_read_cache.clear()
             invalidate_priority_snapshot()
-            _email_sheets_cache = None
         creds = Credentials.from_service_account_info(json.loads(os.environ["GOOGLE_CREDENTIALS"]), scopes=SCOPES)
         _spreadsheet_cache = guard_client(gspread.authorize(creds)).open_by_key(SHEET_ID)
     return _spreadsheet_cache
@@ -1503,32 +1429,6 @@ def save_route_proposal(
     )
 
 
-def ensure_email_worksheets(spreadsheet, *, include_events=True):
-    global _email_sheets_cache
-    spreadsheet_identity = id(spreadsheet)
-    with _email_sheets_cache_lock:
-        if _email_sheets_cache and _email_sheets_cache[0] == spreadsheet_identity:
-            sheets = _email_sheets_cache[1]
-        else:
-            contact_sheet = get_worksheet(spreadsheet, "sales_activities")
-            ensure_contact_worksheet_schema(contact_sheet)
-            sheets = {
-                EMAIL_MESSAGES_SHEET: get_or_create_worksheet(
-                    spreadsheet, EMAIL_MESSAGES_SHEET, EMAIL_MESSAGES_COLUMNS
-                ),
-                EMAIL_RECIPIENTS_SHEET: get_or_create_worksheet(
-                    spreadsheet, EMAIL_RECIPIENTS_SHEET, EMAIL_RECIPIENTS_COLUMNS
-                ),
-            }
-            _email_sheets_cache = (spreadsheet_identity, sheets)
-
-        if include_events and EMAIL_EVENTS_SHEET not in sheets:
-            sheets[EMAIL_EVENTS_SHEET] = get_or_create_worksheet(
-                spreadsheet, EMAIL_EVENTS_SHEET, EMAIL_EVENTS_COLUMNS
-            )
-        return sheets
-
-
 def get_user_rows(spreadsheet):
     return worksheet_to_dicts(
         get_worksheet(spreadsheet, USERS_SHEET),
@@ -1564,153 +1464,6 @@ def get_settings(spreadsheet):
         str(row.get("key", "")).strip(): str(row.get("value", "")).strip()
         for row in rows if str(row.get("key", "")).strip()
     }
-
-
-def email_proposal_template_setting_key(proposal_type, field):
-    proposal_type = normalize_proposal_type(proposal_type)
-    return f"email_proposal_{proposal_type}_{field}"
-
-
-def sanitize_template_order_rows(rows, product_catalog):
-    sanitized = []
-    for row in (rows or [])[:20]:
-        product = str(row.get("product", "")).strip()[:250]
-        quantity = str(row.get("quantity", "")).strip()[:30]
-        unit = str(row.get("unit", "DFP")).strip()[:20] or "DFP"
-        if not product:
-            continue
-        sanitized.append({"product": product, "quantity": quantity, "unit": unit})
-    return canonicalize_proposal_order_rows(sanitized, product_catalog)
-
-
-def get_email_proposal_template_config(settings, proposal_type, product_catalog):
-    proposal_type = normalize_proposal_type(proposal_type)
-    defaults = build_email_proposal_template_defaults(proposal_type)
-    result = {
-        "email_type": proposal_type,
-        "email_type_label": EMAIL_PROPOSAL_TYPES[proposal_type],
-        **defaults,
-    }
-    customized_fields = []
-    for field in EMAIL_PROPOSAL_TEMPLATE_FIELDS:
-        key = email_proposal_template_setting_key(proposal_type, field)
-        if key in settings:
-            result[field] = str(settings.get(key, "")).strip()
-            customized_fields.append(field)
-
-    order_key = email_proposal_template_setting_key(proposal_type, "order_config")
-    order_config = None
-    if settings.get(order_key):
-        try:
-            parsed = json.loads(settings[order_key])
-            if isinstance(parsed, dict):
-                order_config = parsed
-        except (TypeError, ValueError):
-            order_config = None
-
-    if proposal_type == "reminder":
-        default_mode = "latest_order"
-        default_rows = []
-    elif proposal_type == "reactivation":
-        default_mode = "fixed"
-        default_rows = build_reactivation_order_rows(product_catalog)
-    else:
-        default_mode = "fixed"
-        default_rows = build_new_customer_order_rows(product_catalog)
-
-    mode = str((order_config or {}).get("mode", default_mode)).strip().casefold()
-    if proposal_type != "reminder":
-        mode = "fixed"
-    elif mode not in {"latest_order", "fixed"}:
-        mode = default_mode
-    rows = sanitize_template_order_rows(
-        (order_config or {}).get("rows", default_rows),
-        product_catalog,
-    )
-    if mode == "latest_order":
-        rows = []
-    result.update({
-        "order_mode": mode,
-        "order_rows": rows,
-        "customized": bool(customized_fields or order_config),
-    })
-    return result
-
-
-@serialized_crm_write
-def save_email_proposal_template_config(spreadsheet, proposal_type, config):
-    sheet = get_worksheet(spreadsheet, SETTINGS_SHEET)
-    descriptions = {
-        "subject": "Standardämne för mejlförslag",
-        "intro_text": "Standardbrödtext för mejlförslag",
-        "closing_text": "Standardavslutning för mejlförslag",
-        "stockfiller_label": "Knapptext för Stockfiller",
-        "product_sheet_label": "Knapptext för produktblad",
-        "order_config": "Standardprodukter och antal för mejlförslag",
-    }
-    values = {
-        email_proposal_template_setting_key(proposal_type, field): (
-            config[field],
-            f"{descriptions[field]} – {EMAIL_PROPOSAL_TYPES[proposal_type]}",
-        )
-        for field in EMAIL_PROPOSAL_TEMPLATE_FIELDS
-    }
-    values[email_proposal_template_setting_key(proposal_type, "order_config")] = (
-        json.dumps({
-            "mode": config["order_mode"],
-            "rows": config["order_rows"],
-        }, ensure_ascii=False, separators=(",", ":")),
-        f"{descriptions['order_config']} – {EMAIL_PROPOSAL_TYPES[proposal_type]}",
-    )
-
-    with _settings_write_lock:
-        headers = ensure_worksheet_columns(
-            sheet, read_with_retry(lambda: sheet.row_values(1)), SETTINGS_COLUMNS
-        )
-        key_column = headers.index("key")
-        rows = read_with_retry(sheet.get_all_values)
-        row_by_key = {}
-        for row_index, row in enumerate(rows[1:], start=2):
-            key = str(row[key_column] if key_column < len(row) else "").strip()
-            if key and key not in row_by_key:
-                row_by_key[key] = row_index
-        for key, (value, description) in values.items():
-            row_index = row_by_key.get(key)
-            if row_index:
-                sheet.update_cell(row_index, headers.index("value") + 1, value)
-                sheet.update_cell(row_index, headers.index("description") + 1, description)
-            else:
-                append_dict_row(sheet, SETTINGS_COLUMNS, {
-                    "key": key,
-                    "value": value,
-                    "description": description,
-                })
-                row_by_key[key] = len(read_with_retry(sheet.get_all_values))
-        invalidate_sheet_for_write(sheet)
-
-
-def read_email_worksheets(spreadsheet, *, include_events=True):
-    """Optional email stores are read without creating sheets or schema."""
-    titles = [EMAIL_MESSAGES_SHEET, EMAIL_RECIPIENTS_SHEET]
-    if include_events:
-        titles.append(EMAIL_EVENTS_SHEET)
-    sheets = {}
-    for title in titles:
-        try:
-            sheets[title] = get_worksheet(spreadsheet, title)
-        except WorksheetNotFound:
-            sheets[title] = None
-    return sheets
-
-
-def get_email_rows(spreadsheet, *, include_events=True):
-    sheets = read_email_worksheets(spreadsheet, include_events=include_events)
-    def read(title, columns):
-        sheet = sheets.get(title)
-        return worksheet_to_dicts(sheet, expected_columns=columns) if sheet is not None else []
-    return (read(EMAIL_MESSAGES_SHEET, EMAIL_MESSAGES_COLUMNS),
-            read(EMAIL_RECIPIENTS_SHEET, EMAIL_RECIPIENTS_COLUMNS),
-            read(EMAIL_EVENTS_SHEET, EMAIL_EVENTS_COLUMNS) if include_events else [])
 
 
 def append_dict_row(sheet, columns, values, value_input_option="RAW", single_value_columns=None):
@@ -2837,7 +2590,6 @@ def route_blocked_customer_ids(activity_rows, owner, route_date, customers, cont
     return blocked
 
 
-
 def route_priority_values(priority, *, required=False, use_work=False):
     """Use only the current v3 index, never historical/cached legacy scores."""
     priority = priority or {}
@@ -2990,7 +2742,7 @@ def _scoped_contact_decision(priority, *, customer_id, obligation_id="", activit
     if len(customers) != 1:
         return blocked("invalid_customer_identity", review=True)
     scoped = build_priority_customers(customers, order_features, contact_features, None, current.date(), limit=1,
-        email_features=snapshot.get("email_engagement"), planned_activities=[activity] if activity else [], as_of=current,
+         planned_activities=[activity] if activity else [], as_of=current,
         obligation_states={customer_id: [selected_item]}, contact_permissions=state["contact_permissions"],
         planning_owner_user_names=owner_names, allow_commercial_fallback=False)
     enrich_customer_state_priorities(scoped, state, snapshot.get("customer_state_events", ()),
@@ -3743,11 +3495,6 @@ def priority_decision_context_inputs(priority, owner_name):
             "" if persistent_a_prospect
             else priority.get("latest_human_contact_date")
         ),
-        "active_email_intent_event": (
-            priority.get("decision_context_email_event")
-            if "decision_context_email_event" in priority
-            else priority.get("active_email_intent_event")
-        ),
         "segment": priority.get("segment") if persistent_a_prospect else "",
     }
 
@@ -3885,9 +3632,6 @@ def planning_suggestion_candidates(spreadsheet, owner, activity_rows=()):
             "covered_trigger_keys": raw_priority.get("covered_trigger_keys") or [],
             "trigger_precedence": {
                 "a_prospect_due": 1,
-                "stockfiller_click_followup": 2,
-                "product_sheet_click_followup": 3,
-                "email_open_followup": 4,
                 "established_reorder_due": 5,
                 "first_order_onboarding": 6,
                 "first_order_reorder": 7,
@@ -3933,7 +3677,7 @@ def planning_suggestion_candidates(spreadsheet, owner, activity_rows=()):
             str(candidate.get("customer_id") or "").strip(), {}
         )
         email_available = any(
-            is_valid_email(address)
+            address["valid"]
             for address in split_email_values(
                 customer.get("email"), customer.get("email_last_order")
             )
@@ -4070,18 +3814,6 @@ def resolve_suggestions_for_contact(
         resolved_by_type="contact",
         resolved_by_id=contact_id,
         request_id=request_id,
-    )
-
-
-def resolve_suggestions_for_email(
-    spreadsheet, *, owner=None, customer_id, email_id
-):
-    return resolve_suggestions_for_customer_event(
-        spreadsheet,
-        customer_id=customer_id,
-        resolved_by_type="email",
-        resolved_by_id=email_id,
-        request_id=f"email:{email_id}",
     )
 
 
@@ -4621,477 +4353,11 @@ def planning_preview_serializer():
     return URLSafeTimedSerializer(secret, salt="polarbar-planning-route-preview-activity-v1")
 
 
-def blocked_recipient_reasons(recipient_rows):
-    reasons = {}
-    for row in recipient_rows:
-        email = normalize_email(row.get("intended_email"))
-        if not email:
-            continue
-        bounce_type = str(row.get("bounce_type", "")).strip().casefold()
-        if str(row.get("unsubscribed_at", "")).strip():
-            reasons[email] = "Avregistrerad i Brevo"
-        elif str(row.get("blocked_at", "")).strip():
-            reasons[email] = "Blockerad i Brevo"
-        elif bounce_type in {"hardbounce", "hard bounce", "invalid", "spam"}:
-            reasons[email] = "Permanent studs eller ogiltig adress"
-    return reasons
-
-
-def build_recipient_options(customer, latest_order, recipient_rows):
-    order_emails = split_email_values(customer.get("email_last_order"))
-    combined = split_email_values(customer.get("email_last_order"), customer.get("email"))
-    order_keys = {normalize_email(item["email"]) for item in order_emails}
-    blocked = blocked_recipient_reasons(recipient_rows)
-    recipients = []
-    for item in combined:
-        if not item["valid"]:
-            continue
-        email = item["email"]
-        key = normalize_email(email)
-        source = "email_last_order" if key in order_keys else "email"
-        greeting = recipient_greeting_name(
-            email,
-            customer.get("name", ""),
-        )
-        blocked_reason = blocked.get(key, "")
-        recipients.append({
-            "email": email,
-            "source": source,
-            "valid": bool(item["valid"]),
-            "selected": bool(item["valid"] and not blocked_reason),
-            "greeting_name": greeting,
-            "blocked_reason": blocked_reason,
-        })
-    return recipients
-
-
-def build_email_proposal_warnings(customer_name, latest_order, contact_rows, message_rows, created_at=None):
-    warnings = []
-    customer_key = normalize_key(customer_name)
-    today = stockholm_today()
-
-    recent_contacts = []
-    for row in contact_rows:
-        if normalize_key(row.get("customer")) != customer_key:
-            continue
-        if str(row.get("email_id", "")).strip():
-            continue
-        registered = parse_datetime_value(row.get("date_time"))
-        if registered and (today - registered.date()).days <= 7:
-            recent_contacts.append(registered)
-    if recent_contacts:
-        latest = max(recent_contacts)
-        warnings.append({
-            "code": "recent_contact",
-            "message": f"En säljkontakt registrerades {latest.strftime('%Y-%m-%d')}.",
-        })
-
-    recent_messages = []
-    for row in message_rows:
-        if normalize_key(row.get("customer")) != customer_key or is_yes(row.get("is_test")):
-            continue
-        if str(row.get("status", "")).strip().casefold() not in {"sent", "partial"}:
-            continue
-        sent_at = parse_datetime_value(row.get("sent_at"))
-        if sent_at and (today - sent_at.date()).days <= 10:
-            recent_messages.append(sent_at)
-    if recent_messages:
-        latest = max(recent_messages)
-        warnings.append({
-            "code": "recent_reminder",
-            "message": f"Ett mejlförslag skickades {latest.strftime('%Y-%m-%d')}.",
-        })
-
-    created = parse_datetime_value(created_at)
-    latest_order_date = parse_date_value(latest_order.get("order_date"))
-    if created and latest_order_date and latest_order_date > created.date():
-        warnings.append({
-            "code": "new_order",
-            "message": f"En ny order registrerades {latest_order_date.isoformat()} efter att utkastet skapades.",
-        })
-    return warnings
-
-
-def build_reminder_warnings(customer_name, latest_order, contact_rows, message_rows, created_at=None):
-    """Backward-compatible alias for the generic proposal warnings."""
-    return build_email_proposal_warnings(
-        customer_name, latest_order, contact_rows, message_rows, created_at=created_at
-    )
-
-
-def latest_live_email_proposals_by_customer(message_rows):
-    latest = {}
-    for row in message_rows:
-        if is_yes(row.get("is_test")):
-            continue
-        if str(row.get("status", "")).strip().casefold() not in {"sent", "partial"}:
-            continue
-        customer_key = normalize_key(row.get("customer"))
-        sent_at = parse_datetime_value(row.get("sent_at"))
-        if not customer_key or not sent_at:
-            continue
-        if customer_key not in latest or sent_at > latest[customer_key]:
-            latest[customer_key] = sent_at
-    return latest
-
-
-def latest_live_reminders_by_customer(message_rows):
-    """Backward-compatible alias; all V1 email types share the same cooldown."""
-    return latest_live_email_proposals_by_customer(message_rows)
-
-
-def email_contact_decision(priority, *, planned_activity_id=""):
-    """Use the same final contact authority as cards and calendar actions."""
-    priority = priority or {}
-    guidance = priority.get("list_guidance") or priority.get("customer_guidance") or {}
-    reason = str(guidance.get("reason_code") or priority.get("recommendation_suppression_reason") or "contact_permission_unavailable")
-    if route_priority_values(priority, required=bool(planned_activity_id)) is None:
-        return {"allowed": False, "reason_code": "current_priority_unavailable"}
-    if planned_activity_id:
-        allowed = bool(guidance.get("can_execute_planned_contact") is True
-                       and str(guidance.get("planned_activity_id") or "") == str(planned_activity_id))
-    else:
-        allowed = (guidance.get("can_start_unscheduled_contact", priority.get("can_start_unscheduled_contact")) is True)
-        if str(guidance.get("action_scope") or "").startswith(("obligation:", "planned_activity:")):
-            allowed, reason = False, "explicit_followup_takes_precedence"
-    return {"allowed": allowed, "reason_code": reason}
-
-
-def build_email_proposal_status(customer, priority, relationship, latest_live_proposals,
-                                blocked_recipients, today):
-    relationship = relationship or {}
-    proposal_type = normalize_proposal_type(relationship.get("email_type"))
-    blockers = []
-    if customer_is_cancelled(customer):
-        blockers.append("customer_cancelled")
-    contact_decision = email_contact_decision(priority)
-    if not contact_decision["allowed"] and contact_decision["reason_code"] not in blockers:
-        blockers.append(contact_decision["reason_code"])
-
-    recipient_candidates = split_email_values(customer.get("email_last_order"), customer.get("email"))
-    usable_recipients = {
-        normalize_email(item.get("email"))
-        for item in recipient_candidates
-        if item.get("valid") and normalize_email(item.get("email")) not in blocked_recipients
-    }
-    if not usable_recipients:
-        blockers.append("no_usable_recipient")
-
-    order_count = int(parse_number_value(priority.get("order_count"), 0) or 0)
-    has_prior_order = bool(relationship.get("has_prior_order", order_count > 0))
-    action_type = str((priority.get("next_action") or {}).get("action_type", "")).strip()
-    if action_type in {"negative_reactivation", "follow_up", "scheduled_followup"}:
-        blockers.append("other_followup_takes_precedence")
-
-    reason = ""
-    if proposal_type == "reminder":
-        if not has_prior_order:
-            blockers.append("no_prior_order")
-        days_since_delivery = parse_number_value(
-            relationship.get("days_since_delivery", priority.get("days_since_delivery")), None
-        )
-        overdue_days = parse_number_value(priority.get("overdue_days"), None)
-        expected_cycle = parse_number_value(priority.get("expected_cycle_days"), None)
-        if days_since_delivery is not None and expected_cycle is not None:
-            due_after_days = min(
-                int(expected_cycle) + EMAIL_PROPOSAL_GRACE_DAYS,
-                EMAIL_PROPOSAL_RECENT_DELIVERY_DAYS,
-            )
-            if days_since_delivery < due_after_days:
-                blockers.append("not_due_yet")
-            else:
-                reason = f"{int(days_since_delivery)} dagar sedan senaste leverans"
-        elif overdue_days is None or overdue_days < EMAIL_PROPOSAL_GRACE_DAYS:
-            blockers.append("not_due_yet")
-        else:
-            reason = f"{int(overdue_days)} dagar efter förväntat återköpsdatum"
-    elif proposal_type == "reactivation":
-        if not has_prior_order:
-            blockers.append("no_prior_order")
-        days_since_delivery = relationship.get("days_since_delivery")
-        reason = (
-            f"{int(days_since_delivery)} dagar sedan senaste leverans"
-            if days_since_delivery is not None and days_since_delivery >= 0
-            else "Tidigare kund utan leverans de senaste 60 dagarna"
-        )
-    else:
-        if has_prior_order:
-            blockers.append("has_prior_order")
-        reason = "Ingen tidigare order"
-
-    latest_contact_date = parse_date_value(priority.get("latest_contact_date"))
-    if latest_contact_date:
-        days_since_contact = (today - latest_contact_date).days
-        if 0 <= days_since_contact <= EMAIL_PROPOSAL_CONTACT_COOLDOWN_DAYS:
-            blockers.append("recent_sales_contact")
-
-    latest_sent = latest_live_proposals.get(normalize_key(customer.get("customer")))
-    if latest_sent:
-        days_since_sent = (today - latest_sent.date()).days
-        if 0 <= days_since_sent <= EMAIL_PROPOSAL_SENT_COOLDOWN_DAYS:
-            blockers.append("recent_email_proposal")
-
-    return {
-        "due": not blockers,
-        "email_type": proposal_type,
-        "email_type_label": EMAIL_PROPOSAL_TYPES[proposal_type],
-        "reason": reason if not blockers else "",
-        "blockers": blockers,
-        "eligible_recipient_count": len(usable_recipients),
-        "latest_sent_at": format_datetime_value(latest_sent) if latest_sent else "",
-    }
-
-
-def build_reminder_email_status(customer, priority, latest_live_reminders, blocked_recipients, today):
-    relationship = {
-        "email_type": "reminder",
-        "has_prior_order": int(parse_number_value(priority.get("order_count"), 0) or 0) > 0,
-        "days_since_delivery": priority.get("days_since_delivery"),
-    }
-    status = build_email_proposal_status(
-        customer, priority, relationship, latest_live_reminders, blocked_recipients, today
-    )
-    if "recent_email_proposal" in status["blockers"]:
-        status["blockers"] = [
-            "recent_reminder_email" if item == "recent_email_proposal" else item
-            for item in status["blockers"]
-        ]
-    return status
-
-
-def build_email_proposal_draft(
-    spreadsheet,
-    row_number,
-    draft_id=None,
-    created_at=None,
-    *,
-    customer=None,
-    customers=None,
-):
-    customer = customer or get_customer_by_row(spreadsheet, row_number)
-    if not customer:
-        return None
-    order_rows = get_order_rows(spreadsheet)
-    contact_rows = get_contact_rows(spreadsheet)
-    message_rows, recipient_rows, _ = get_email_rows(
-        spreadsheet, include_events=False
-    )
-    if customers is not None:
-        customer_lookup = CustomerLookup(customers)
-        order_rows = related_rows_for_customer(
-            order_rows,
-            customers,
-            customer,
-            name_key="Customer",
-            number_key="Customer number",
-            customer_lookup=customer_lookup,
-        )
-        contact_rows = related_rows_for_customer(
-            contact_rows,
-            customers,
-            customer,
-            customer_lookup=customer_lookup,
-        )
-        message_rows = related_rows_for_customer(
-            message_rows,
-            customers,
-            customer,
-            customer_lookup=customer_lookup,
-        )
-        visible_email_ids = {
-            str(message.get("email_id") or "").strip()
-            for message in message_rows
-        }
-        recipient_rows = [
-            recipient for recipient in recipient_rows
-            if str(recipient.get("email_id") or "").strip()
-            in visible_email_ids
-        ]
-    latest_order = build_latest_order_context(order_rows, customer.get("customer"))
-    relationship = classify_customer_relationship(
-        order_rows,
-        customer.get("customer"),
-        today=stockholm_today(),
-        recent_days=EMAIL_PROPOSAL_RECENT_DELIVERY_DAYS,
-    )
-    proposal_type = relationship["email_type"]
-    settings = get_settings(spreadsheet)
-    product_catalog = build_settings_product_catalog(settings)
-    template = get_email_proposal_template_config(settings, proposal_type, product_catalog)
-    if template["order_mode"] == "fixed":
-        suggested_rows = template["order_rows"]
-    else:
-        suggested_rows = canonicalize_proposal_order_rows(
-            latest_order.get("order_rows", []), product_catalog
-        )
-
-    unique_store_count = count_unique_order_customers(order_rows)
-    copy = build_email_proposal_copy(
-        proposal_type,
-        customer.get("customer"),
-        latest_delivery_date=latest_order.get("delivery_date"),
-        has_order_rows=bool(suggested_rows),
-        unique_store_count=unique_store_count,
-        template=template,
-    )
-    created_at = created_at or now_text()
-    product_setting = EMAIL_PROPOSAL_PRODUCT_SETTINGS[proposal_type]
-    product_sheet_url = safe_http_url(settings.get(product_setting))
-    fallback_product_url = safe_http_url(settings.get("reminder_product_sheet_url"))
-    used_product_fallback = bool(not product_sheet_url and fallback_product_url)
-    if used_product_fallback:
-        product_sheet_url = fallback_product_url
-    stockfiller_url = safe_http_url(
-        settings.get("email_proposal_stockfiller_url") or settings.get("reminder_stockfiller_url")
-    )
-    notices = []
-    if not product_sheet_url:
-        notices.append(
-            f"Produktbladslänken för {EMAIL_PROPOSAL_TYPES[proposal_type].lower()} saknas eller är ogiltig "
-            "och utelämnas från mejlet."
-        )
-    elif used_product_fallback and proposal_type != "reminder":
-        notices.append(
-            f"Inställningen {product_setting} saknas. Det vanliga produktbladet används tills vidare."
-        )
-    if not stockfiller_url:
-        notices.append("Stockfiller-länken saknas eller är ogiltig och utelämnas från mejlet.")
-    if not product_catalog:
-        notices.append("Inga sku_-artiklar finns i settings. Produktrader behöver fyllas i manuellt.")
-    elif len(suggested_rows) < 4 and proposal_type in {"reactivation", "new_customer"}:
-        notices.append("En eller flera av standardartiklarna saknas i settings.")
-
-    user = current_user()
-    return {
-        "draft_id": draft_id or str(uuid.uuid4()),
-        "created_at": created_at,
-        "send_mode": EMAIL_SEND_MODE,
-        "test_recipient": EMAIL_TEST_RECIPIENT if EMAIL_SEND_MODE != "live" else "",
-        "customer": {
-            "row": row_number,
-            "customer": str(customer.get("customer", "")).strip(),
-            "customer_id": str(customer.get("customer_id", "")).strip(),
-            "customer_number": str(customer.get("customer_number", "")).strip(),
-            "cancelled": customer_is_cancelled(customer),
-        },
-        "email_type": proposal_type,
-        "email_type_label": EMAIL_PROPOSAL_TYPES[proposal_type],
-        "relationship": relationship,
-        "latest_order_reference": latest_order.get("reference", ""),
-        "latest_delivery_date": latest_order.get("delivery_date", ""),
-        "recipients": build_recipient_options(customer, latest_order, recipient_rows),
-        "subject": copy["subject"],
-        "intro_text": copy["intro_text"],
-        "closing_text": copy["closing_text"],
-        "order_rows": suggested_rows,
-        "product_catalog": product_catalog,
-        "links": {
-            "product_sheet_url": product_sheet_url,
-            "stockfiller_url": stockfiller_url,
-        },
-        "cta_labels": {
-            "product_sheet": copy["product_sheet_label"],
-            "stockfiller": copy["stockfiller_label"],
-        },
-        "stats": {
-            "unique_order_customers": unique_store_count,
-            "rounded_unique_order_customers": round_store_count_to_ten(unique_store_count),
-        },
-        "signature": public_user(user),
-        "warnings": build_email_proposal_warnings(
-            customer.get("customer"), latest_order, contact_rows, message_rows
-        ),
-        "notices": notices,
-    }
-
-
-def build_reminder_draft(spreadsheet, row_number, draft_id=None, created_at=None):
-    """Backward-compatible alias returning the customer's current proposal type."""
-    return build_email_proposal_draft(
-        spreadsheet, row_number, draft_id=draft_id, created_at=created_at
-    )
-
-
-def send_brevo_transactional_email(*, sender, recipient_email, recipient_name, reply_to,
-                                    subject, html_body, text_body, email_id,
-                                    email_type="reminder"):
-    api_key = str(os.environ.get("BREVO_API_KEY", "")).strip()
-    if not api_key:
-        raise RuntimeError("BREVO_API_KEY saknas")
-    response = requests.post(
-        BREVO_SEND_URL,
-        headers={"api-key": api_key, "accept": "application/json", "content-type": "application/json"},
-        json={
-            "sender": sender,
-            "to": [{"email": recipient_email, "name": recipient_name or recipient_email}],
-            "replyTo": reply_to,
-            "subject": subject,
-            "htmlContent": html_body,
-            "textContent": text_body,
-            "tags": ["store-tracker", f"proposal-{normalize_proposal_type(email_type)}", f"email-{email_id}"],
-        },
-        timeout=20,
-    )
-    if response.status_code >= 400:
-        detail = response.text[:500] if response.text else f"HTTP {response.status_code}"
-        raise RuntimeError(detail)
-    try:
-        payload = response.json()
-    except (ValueError, requests.exceptions.JSONDecodeError):
-        payload = {}
-    message_id = normalize_message_id(payload.get("messageId"))
-    if not message_id:
-        raise RuntimeError("Brevo returnerade inget Message ID")
-    return message_id
-
-
-def build_sales_activity_for_email(spreadsheet, *, email_id, email_type,
-                                   customer_name, customer_id="", customer_number="", user,
-                                   recipients, partial, planned_activity_id="", obligation_id="",
-                                   request_fingerprint="", occurred_at=""):
-    sheet = get_worksheet(spreadsheet, "sales_activities")
-    headers = ensure_contact_worksheet_schema(sheet)
-    type_label = EMAIL_PROPOSAL_TYPES[normalize_proposal_type(email_type)]
-    result = f"Mejlförslag delvis skickat – {type_label}" if partial else f"Mejlförslag skickat – {type_label}"
-    row_data = {
-        "date_time": occurred_at or now_text(),
-        "sales_person": user.get("name") or user.get("user_name", ""),
-        "sales_user_name": str(user.get("user_name") or "").strip(),
-        "customer": customer_name,
-        "customer_id": str(customer_id or "").strip(),
-        "customer_number": str(customer_number or "").strip(),
-        "contact_channel": "Mejl",
-        "contact_type_key": "email",
-        "result": result,
-        "result_class": "system_email",
-        "activity_source": "crm_email",
-        "analytics_snapshot_version": "sales_coaching_v1",
-        "priority_snapshot_quality": "missing",
-        "comment": f"Mottagare: {', '.join(recipients)}",
-        "customer_contact_person": "",
-        "follow_up_date": "",
-        "email_id": email_id,
-        "recorded_at": stockholm_now().isoformat(),
-    }
-    if planned_activity_id:
-        row_data.update(contact_id=stable_planning_uuid("sent-email", customer_id, email_id),
-                        planned_activity_id=planned_activity_id, purpose="scheduled_email_attempt",
-                        contact_request_fingerprint=request_fingerprint)
-    append_dict_row(
-        sheet,
-        headers,
-        row_data,
-        value_input_option="USER_ENTERED",
-        single_value_columns=FREEZER_COLUMNS,
-    )
-    return row_data
-
-
 @app.before_request
 def require_authenticated_session():
     public_endpoints = {
         "index", "images", "static", "login", "get_session", "health",
-        "brevo_webhook", "brevo_reconcile", "instagram.feed", "instagram.webhook"
+          "instagram.feed", "instagram.webhook"
     }
     if request.method == "OPTIONS" or request.endpoint in public_endpoints:
         return None
@@ -5150,827 +4416,6 @@ def get_session():
 def logout():
     session.clear()
     return jsonify({"ok": True})
-
-
-@app.route("/email-proposal-settings", methods=["GET"])
-def get_email_proposal_settings():
-    if not user_is_admin(current_user()):
-        return jsonify({"ok": False, "error": "admin_required"}), 403
-    spreadsheet = get_spreadsheet_with_retry()
-    settings = get_settings(spreadsheet)
-    product_catalog = build_settings_product_catalog(settings)
-    templates = {
-        proposal_type: get_email_proposal_template_config(
-            settings, proposal_type, product_catalog
-        )
-        for proposal_type in EMAIL_PROPOSAL_TYPES
-    }
-    return jsonify({
-        "ok": True,
-        "templates": templates,
-        "product_catalog": product_catalog,
-        "placeholders": {
-            "{{dagar}}": "Dagar sedan senaste leverans",
-            "{{veckor}}": "Veckor sedan senaste leverans",
-            "{{antal_butiker}}": "Avrundat antal butiker med order",
-            "{{butiksnamn}}": "Butikens namn",
-            "(namn)": "Mottagarens valda hälsningsnamn",
-        },
-    })
-
-
-@app.route("/email-proposal-settings/<proposal_type>", methods=["PUT"])
-def update_email_proposal_settings(proposal_type):
-    if not user_is_admin(current_user()):
-        return jsonify({"ok": False, "error": "admin_required"}), 403
-    proposal_type = str(proposal_type or "").strip().casefold()
-    if proposal_type not in EMAIL_PROPOSAL_TYPES:
-        return jsonify({"ok": False, "error": "invalid_email_type"}), 404
-
-    data = request.get_json(silent=True) or {}
-    values = {
-        field: str(data.get(field) or "").strip()
-        for field in EMAIL_PROPOSAL_TEMPLATE_FIELDS
-    }
-    if not values["subject"] or not values["intro_text"]:
-        return jsonify({"ok": False, "error": "missing_email_content"}), 400
-    if not values["stockfiller_label"] or not values["product_sheet_label"]:
-        return jsonify({"ok": False, "error": "missing_cta_label"}), 400
-    if len(values["subject"]) > 250:
-        return jsonify({"ok": False, "error": "subject_too_long"}), 400
-    if len(values["intro_text"]) > 5000 or len(values["closing_text"]) > 5000:
-        return jsonify({"ok": False, "error": "body_too_long"}), 400
-    if len(values["stockfiller_label"]) > 80 or len(values["product_sheet_label"]) > 80:
-        return jsonify({"ok": False, "error": "cta_label_too_long"}), 400
-
-    spreadsheet = get_spreadsheet_with_retry()
-    settings = get_settings(spreadsheet)
-    product_catalog = build_settings_product_catalog(settings)
-    order_mode = str(data.get("order_mode") or "fixed").strip().casefold()
-    if proposal_type != "reminder":
-        order_mode = "fixed"
-    elif order_mode not in {"latest_order", "fixed"}:
-        return jsonify({"ok": False, "error": "invalid_order_mode"}), 400
-    order_rows = sanitize_template_order_rows(data.get("order_rows"), product_catalog)
-    if order_mode == "fixed" and (
-        not order_rows or any(not str(row.get("quantity", "")).strip() for row in order_rows)
-    ):
-        return jsonify({"ok": False, "error": "missing_order_rows"}), 400
-    if order_mode == "latest_order":
-        order_rows = []
-
-    config = {
-        **values,
-        "order_mode": order_mode,
-        "order_rows": order_rows,
-    }
-    save_email_proposal_template_config(spreadsheet, proposal_type, config)
-    updated_settings = get_settings(spreadsheet)
-    updated = get_email_proposal_template_config(
-        updated_settings, proposal_type, product_catalog
-    )
-    return jsonify({"ok": True, "template": updated})
-
-
-@app.route("/customers/<int:row>/email-proposal-draft", methods=["GET"])
-@app.route("/customers/<int:row>/reminder-email-draft", methods=["GET"])
-def get_email_proposal_draft(row):
-    spreadsheet = get_spreadsheet_with_retry()
-    customers = get_customer_rows(spreadsheet)
-    customer = resolve_accessible_customer(
-        customers, current_user(), row=row
-    )
-    if customer is None:
-        return jsonify({"ok": False, "error": "customer_not_found"}), 404
-    draft = build_email_proposal_draft(
-        spreadsheet,
-        row,
-        customer=customer,
-        customers=customers,
-    )
-    if not draft:
-        return jsonify({"ok": False, "error": "customer_not_found"}), 404
-    if draft["customer"]["cancelled"]:
-        draft["notices"].insert(0, "Kunden är markerad som avslutad och mejlet kan inte skickas.")
-    return jsonify({"ok": True, "draft": draft})
-
-
-def sanitize_order_rows(rows):
-    result = []
-    for row in (rows or [])[:50]:
-        product = str(row.get("product", "")).strip()[:250]
-        quantity = str(row.get("quantity", "")).strip()[:30]
-        unit = str(row.get("unit", "DFP")).strip()[:20] or "DFP"
-        if product:
-            result.append({
-                "product": product,
-                "quantity": quantity,
-                "unit": unit,
-                "new_for_customer": bool(row.get("new_for_customer")),
-            })
-    return result
-
-
-@app.route("/customers/<int:row>/email-proposal/send", methods=["POST"])
-@app.route("/customers/<int:row>/reminder-email/send", methods=["POST"])
-def send_email_proposal(row):
-    data = request.get_json(silent=True) or {}
-    draft_id = str(data.get("draft_id", "")).strip()
-    if not draft_id or len(draft_id) > 80:
-        return jsonify({"ok": False, "error": "invalid_draft_id"}), 400
-
-    with _active_send_lock:
-        if draft_id in _active_send_ids:
-            return jsonify({"ok": False, "error": "send_in_progress"}), 409
-        _active_send_ids.add(draft_id)
-
-    try:
-        # Serialize the final authority check, outbox reservation and calendar
-        # attempt completion with contact/permission mutations in this process.
-        with planning_write_lock():
-            return _send_email_proposal_locked(row, data, draft_id)
-    except CustomerStateConflict as exc:
-        return customer_state_error(exc)
-    finally:
-        with _active_send_lock:
-            _active_send_ids.discard(draft_id)
-
-
-def email_send_request_fingerprint(data):
-    return canonical_payload_fingerprint({key: value for key, value in data.items() if key != "confirm_warnings"})
-
-
-def complete_sent_email_attempt(spreadsheet, email_contact, context):
-    """Idempotently record the executed calendar attempt, leaving its promise open."""
-    aid = str(context.get("planned_activity_id") or "")
-    sheet, headers, row_index, activity = find_planned_activity(spreadsheet, aid)
-    if not row_index or str(activity.get("customer_id") or "") != str(email_contact.get("customer_id") or ""):
-        raise CustomerStateConflict("email_activity_scope_mismatch", "Den skickade mejluppgiftens kundkoppling har ändrats.")
-    if not (activity.get("status") == "completed" and activity.get("completed_contact_id") == email_contact.get("contact_id")):
-        validate_customer_state_revision({"expected_revision": context.get("expected_planned_activity_revision")}, {"revision": planning_revision(activity)})
-        if activity.get("status") != "planned":
-            raise CustomerStateConflict("email_activity_scope_mismatch", "Mejlet är skickat men kalenderuppgiften har ändrats. Granska den separat.")
-        update_sheet_row(sheet, row_index, headers, {
-            "status": "completed", "completed_contact_id": email_contact["contact_id"],
-            "revision": planning_revision(activity) + 1, "updated_at": planning_timestamp(),
-            "last_mutation_request_id": email_contact["email_id"],
-            "last_mutation_fingerprint": context.get("request_fingerprint", ""),
-        })
-
-def recover_sent_email_attempt(spreadsheet, message, customer, data):
-    """Repair a saved send's contact/calendar writes without another provider call."""
-    try:
-        context = json.loads(message.get("planning_context_json") or "{}")
-    except (TypeError, ValueError):
-        return None
-    if not context.get("planned_activity_id") or message.get("status") not in {"sent", "partial"} or message.get("is_test") == "Y":
-        return None
-    if (context.get("request_fingerprint") != email_send_request_fingerprint(data)
-            or message.get("customer_id") != customer.get("customer_id")):
-        raise CustomerStateConflict("idempotency_payload_mismatch", "Samma utkast har redan skickats med ett annat innehåll eller åtagande.")
-    email_id = str(message.get("email_id") or "")
-    _messages, recipients, _events = get_email_rows(spreadsheet, include_events=False)
-    sent_to = [row.get("intended_email") for row in recipients
-               if row.get("email_id") == email_id and row.get("send_status") == "sent"]
-    if not sent_to:
-        raise CustomerStateConflict("email_completion_evidence_missing", "Sändningen finns men mottagarbekräftelsen saknas. Granska innan kalenderstatus ändras.")
-    contacts = [row for row in get_contact_rows(spreadsheet) if row.get("email_id") == email_id
-                and row.get("planned_activity_id") == context["planned_activity_id"]]
-    if len(contacts) > 1:
-        raise CustomerStateConflict("email_completion_evidence_ambiguous", "Mejlet har flera kontaktkopplingar och måste granskas.")
-    contact = contacts[0] if contacts else build_sales_activity_for_email(
-        spreadsheet, email_id=email_id, email_type=message.get("email_type"), customer_name=customer.get("customer"),
-        customer_id=customer.get("customer_id"), customer_number=customer.get("customer_number", ""),
-        user={"name": message.get("sender_name"), "user_name": message.get("sender_user_name")},
-        recipients=sent_to, partial=message.get("status") == "partial", planned_activity_id=context["planned_activity_id"],
-        obligation_id=context.get("obligation_id", ""), request_fingerprint=context["request_fingerprint"],
-        occurred_at=message.get("sent_at", ""))
-    complete_sent_email_attempt(spreadsheet, contact, context)
-    return jsonify(ok=True, duplicate=True, status=message["status"], email_id=email_id,
-                   email_type=message.get("email_type"), sent=sent_to, failed=[], is_test=False,
-                   planned_activity_id=context["planned_activity_id"], obligation_id=context.get("obligation_id", ""),
-                   planning_completion_saved=True)
-
-
-def _send_email_proposal_locked(row, data, draft_id):
-    spreadsheet = get_spreadsheet_with_retry()
-    invalidate_sheet_cache(spreadsheet, *PRIORITY_SNAPSHOT_CACHE_TITLES)
-    customers = get_customer_rows(spreadsheet)
-    customer = resolve_accessible_customer(
-        customers, current_user(), row=row
-    )
-    if customer is None:
-        return jsonify({"ok": False, "error": "customer_not_found"}), 404
-    if customer_is_cancelled(customer):
-        return jsonify({"ok": False, "error": "customer_cancelled"}), 409
-    # Duplicate detection is read-only; a blocked action must not create or
-    # expand any outbox sheets before its final contact authority is checked.
-    try:
-        message_sheet = get_worksheet(spreadsheet, EMAIL_MESSAGES_SHEET)
-        existing_row, _, existing = find_sheet_row(message_sheet, "email_id", draft_id)
-    except WorksheetNotFound:
-        existing_row, existing = None, {}
-    if existing_row:
-        repaired = recover_sent_email_attempt(spreadsheet, existing, customer, data)
-        if repaired is not None:
-            return repaired
-        return jsonify({
-            "ok": False,
-            "error": "duplicate_send",
-            "status": existing.get("status", ""),
-        }), 409
-
-    try:
-        current = stockholm_now()
-        snapshot = get_authoritative_priority_snapshot(spreadsheet, today=current.date(), as_of=current)
-        priorities = snapshot["priorities"]
-        priority = next((item for item in priorities if str(item.get("customer_id") or "")
-                         == str(customer.get("customer_id") or "")), None)
-    except Exception:
-        app.logger.exception("Could not verify email contact authority")
-        return planning_error("priority_data_unavailable", "Kundens aktuella kontaktbeslut kunde inte verifieras. Mejlet har inte skickats.", 503)
-    if priority is None:
-        return planning_error("priority_data_unavailable", "Kundens aktuella kontaktbeslut saknas. Mejlet har inte skickats.", 503)
-    planned_activity_id = str(data.get("planned_activity_id") or "").strip()
-    planned_email = None
-    if planned_activity_id:
-        planned_email = next((activity for activity in snapshot["planned_activity_rows"]
-                              if str(activity.get("planned_activity_id") or "") == planned_activity_id), None)
-        if (not planned_email or normalize_planning_contact_type(planned_email.get("contact_type")) != "email"
-                or str(planned_email.get("customer_id") or "") != str(customer.get("customer_id") or "")
-                or str(planned_email.get("status") or "").lower() != "planned"):
-            raise CustomerStateConflict("email_activity_scope_mismatch", "Mejlet måste avse kundens aktuella bokade mejluppgift.")
-        validate_customer_state_revision({"expected_revision": data.get("expected_planned_activity_revision")},
-                                         {"revision": planning_revision(planned_email)})
-        # A customer can have several independent bookings. Authorize this
-        # email's exact scope, even when the card primarily shows another one.
-        contact_decision = route_planned_contact_decision(priority, planned_email,
-                            snapshot=snapshot, route_date=current.date())
-    else:
-        contact_decision = email_contact_decision(priority)
-    if not contact_decision["allowed"]:
-        code = "do_not_contact" if contact_decision["reason_code"] == "do_not_contact" else "email_contact_blocked"
-        return planning_error(code, "Kundens aktuella åtgärd tillåter inte detta mejl. Ladda om kundens prioritering.", 409,
-                              reason_code=contact_decision["reason_code"])
-    email_obligation = None
-    if planned_activity_id:
-        guidance = contact_decision.get("guidance") or {}
-        expected_oid = str(guidance.get("obligation_id") or "")
-        if not expected_oid or str(data.get("obligation_id") or "") != expected_oid:
-            raise CustomerStateConflict("email_activity_scope_mismatch", "Mejlets åtagande har ändrats. Öppna den bokade mejluppgiften igen.")
-        email_obligation = next((item for item in snapshot["customer_state"]["obligations"].get(str(customer.get("customer_id") or ""), [])
-                                 if item["obligation_id"] == expected_oid and item.get("planned_activity_id") == planned_activity_id), None)
-        if email_obligation is None:
-            raise CustomerStateConflict("email_activity_scope_mismatch", "Mejlets åtagande kunde inte verifieras.")
-        validate_customer_state_revision({"expected_revision": data.get("expected_obligation_revision")}, email_obligation)
-
-    sheets = ensure_email_worksheets(spreadsheet)
-
-    draft_created_at = str(data.get("created_at", "")).strip()
-    current_draft = build_email_proposal_draft(
-        spreadsheet,
-        row,
-        draft_id=draft_id,
-        created_at=draft_created_at or now_text(),
-        customer=customer,
-        customers=customers,
-    )
-    if not current_draft:
-        return jsonify({"ok": False, "error": "customer_not_found"}), 404
-    if current_draft["customer"]["cancelled"]:
-        return jsonify({"ok": False, "error": "customer_cancelled"}), 409
-
-    requested_email_type = str(data.get("email_type", "")).strip()
-    if requested_email_type and normalize_proposal_type(requested_email_type) != current_draft["email_type"]:
-        return jsonify({
-            "ok": False,
-            "error": "email_type_changed",
-            "email_type": current_draft["email_type"],
-            "email_type_label": current_draft["email_type_label"],
-        }), 409
-
-    allowed = {normalize_email(item["email"]): item for item in current_draft["recipients"]}
-    selected = []
-    for item in data.get("recipients") or []:
-        if not item.get("selected"):
-            continue
-        key = normalize_email(item.get("email"))
-        allowed_item = allowed.get(key)
-        if not allowed_item or not allowed_item.get("valid"):
-            continue
-        if allowed_item.get("blocked_reason"):
-            return jsonify({
-                "ok": False,
-                "error": "recipient_blocked",
-                "email": allowed_item.get("email"),
-                "reason": allowed_item.get("blocked_reason"),
-            }), 409
-        selected.append({
-            "email": allowed_item["email"],
-            "greeting_name": first_name(item.get("greeting_name")),
-        })
-    if not selected:
-        return jsonify({"ok": False, "error": "no_valid_recipients"}), 400
-
-    warnings = list(current_draft.get("warnings") or [])
-    if str(data.get("latest_order_reference", "")).strip() != str(current_draft.get("latest_order_reference", "")).strip():
-        warnings.append({
-            "code": "new_order",
-            "message": "Kundens senaste order har ändrats sedan utkastet öppnades.",
-        })
-    unique_warnings = {item["code"]: item for item in warnings}
-    warnings = list(unique_warnings.values())
-    if warnings and not data.get("confirm_warnings"):
-        return jsonify({
-            "ok": False,
-            "error": "warning_confirmation_required",
-            "warnings": warnings,
-        }), 409
-
-    subject = str(data.get("subject", "")).strip()[:250]
-    intro_text = str(data.get("intro_text", "")).strip()[:5000]
-    closing_text = str(data.get("closing_text", "")).strip()[:5000]
-    order_rows = sanitize_order_rows(data.get("order_rows"))
-    if not subject or not intro_text:
-        return jsonify({"ok": False, "error": "missing_email_content"}), 400
-
-    product_sheet_url = safe_http_url(current_draft["links"].get("product_sheet_url"))
-    stockfiller_url = safe_http_url(current_draft["links"].get("stockfiller_url"))
-    product_sheet_label = (
-        current_draft["cta_labels"].get("product_sheet") or "Se sortiment och priser"
-    )
-    stockfiller_label = (
-        current_draft["cta_labels"].get("stockfiller") or "Beställ i Stockfiller"
-    )
-    email_type = current_draft["email_type"]
-    user = current_user()
-    if not is_valid_email(user.get("email")):
-        return jsonify({"ok": False, "error": "invalid_sender_email"}), 400
-    sender_name = str(user.get("name") or user.get("user_name") or "Polarbär").strip()
-    sender = {"name": f"{sender_name} på Polarbär", "email": user["email"]}
-    reply_to = {"name": user.get("name") or sender["name"], "email": user["email"]}
-    is_test = EMAIL_SEND_MODE != "live"
-    if is_test and not is_valid_email(EMAIL_TEST_RECIPIENT):
-        return jsonify({"ok": False, "error": "invalid_test_recipient"}), 500
-
-    first_rendered = render_email_proposal(
-        greeting_name=selected[0].get("greeting_name"),
-        subject=subject,
-        intro_text=intro_text,
-        closing_text=closing_text,
-        order_rows=order_rows,
-        product_sheet_url=product_sheet_url,
-        stockfiller_url=stockfiller_url,
-        sender=user,
-        product_sheet_label=product_sheet_label,
-        stockfiller_label=stockfiller_label,
-    )
-    created_at = draft_created_at or now_text()
-    planning_context = ({name: data.get(name) for name in (
-        "planned_activity_id", "expected_planned_activity_revision", "obligation_id", "expected_obligation_revision")}
-        if planned_activity_id else {})
-    if planning_context:
-        planning_context["request_fingerprint"] = email_send_request_fingerprint(data)
-        planning_context["obligation_due_date"] = email_obligation.get("due_date", "")
-        planning_context["obligation_purpose"] = email_obligation.get("purpose", "")
-    append_dict_row(sheets[EMAIL_MESSAGES_SHEET], [*EMAIL_MESSAGES_COLUMNS, *(["planning_context_json"] if planning_context else [])], {
-        "email_id": draft_id,
-        "customer": current_draft["customer"]["customer"],
-        "customer_number": current_draft["customer"].get("customer_number", ""),
-        "customer_id": current_draft["customer"].get("customer_id", ""),
-        "email_type": email_type,
-        "sender_user_name": user.get("user_name", ""),
-        "sender_name": user.get("name", ""),
-        "sender_email": user.get("email", ""),
-        "subject": subject,
-        "body_text": first_rendered["text"],
-        "body_html": first_rendered["html"],
-        "latest_order_reference": current_draft.get("latest_order_reference", ""),
-        "latest_delivery_date": current_draft.get("latest_delivery_date", ""),
-        "product_sheet_url": product_sheet_url,
-        "stockfiller_url": stockfiller_url,
-        "is_test": "Y" if is_test else "N",
-        "recipient_count": len(selected),
-        "status": "pending",
-        "created_at": created_at,
-        "sent_at": "",
-        "planning_context_json": json.dumps(planning_context, ensure_ascii=False, sort_keys=True) if planning_context else "",
-    })
-
-    successes = []
-    failures = []
-    for recipient in selected:
-        intended_email = recipient["email"]
-        actual_email = EMAIL_TEST_RECIPIENT if is_test else intended_email
-        rendered = render_email_proposal(
-            greeting_name=recipient.get("greeting_name"),
-            subject=subject,
-            intro_text=intro_text,
-            closing_text=closing_text,
-            order_rows=order_rows,
-            product_sheet_url=product_sheet_url,
-            stockfiller_url=stockfiller_url,
-            sender=user,
-            product_sheet_label=product_sheet_label,
-            stockfiller_label=stockfiller_label,
-        )
-        outgoing_subject = rendered["subject"]
-        if is_test:
-            outgoing_subject = f"[TEST – avsett för {intended_email}] {outgoing_subject}"
-        sent_at = now_text()
-        message_id = ""
-        error_text = ""
-        try:
-            message_id = send_brevo_transactional_email(
-                sender=sender,
-                recipient_email=actual_email,
-                recipient_name=recipient.get("greeting_name") or actual_email,
-                reply_to=reply_to,
-                subject=outgoing_subject,
-                html_body=rendered["html"],
-                text_body=rendered["text"],
-                email_id=draft_id,
-                email_type=email_type,
-            )
-            successes.append(intended_email)
-        except Exception as exc:
-            error_text = str(exc)[:500]
-            failures.append({"email": intended_email, "error": error_text})
-        append_dict_row(sheets[EMAIL_RECIPIENTS_SHEET], EMAIL_RECIPIENTS_COLUMNS, {
-            "email_id": draft_id,
-            "customer": current_draft["customer"]["customer"],
-            "customer_id": current_draft["customer"].get("customer_id", ""),
-            "intended_email": intended_email,
-            "actual_email": actual_email,
-            "greeting_name": recipient.get("greeting_name", ""),
-            "brevo_message_id": message_id,
-            "send_status": "sent" if message_id else "failed",
-            "send_error": error_text,
-            "sent_at": sent_at if message_id else "",
-        })
-
-    status = "failed" if not successes else ("partial" if failures else "sent")
-    sent_at = now_text() if successes else ""
-    message_row, message_headers, _ = find_sheet_row(sheets[EMAIL_MESSAGES_SHEET], "email_id", draft_id)
-    if message_row:
-        update_sheet_row(sheets[EMAIL_MESSAGES_SHEET], message_row, message_headers, {
-            "status": status,
-            "sent_at": sent_at,
-        })
-    planning_completion_saved = None
-    if successes and not is_test:
-        try:
-            email_contact = build_sales_activity_for_email(
-                spreadsheet, email_id=draft_id, email_type=email_type,
-                customer_name=current_draft["customer"]["customer"],
-                customer_id=current_draft["customer"].get("customer_id", ""),
-                customer_number=current_draft["customer"].get("customer_number", ""),
-                user=user, recipients=successes, partial=bool(failures), planned_activity_id=planned_activity_id,
-                obligation_id=(email_obligation or {}).get("obligation_id", ""),
-                request_fingerprint=planning_context.get("request_fingerprint", ""),
-            )
-            if planned_activity_id:
-                complete_sent_email_attempt(spreadsheet, email_contact, planning_context)
-                planning_completion_saved = True
-        except Exception:
-            if not planned_activity_id:
-                raise
-            app.logger.exception("Email sent but calendar/contact completion failed")
-            planning_completion_saved = False
-        try:
-            resolve_suggestions_for_email(
-                spreadsheet,
-                owner=user,
-                customer_id=current_draft["customer"].get("customer_id", ""),
-                email_id=draft_id,
-            )
-        except Exception:
-            app.logger.exception(
-                "Could not resolve planning suggestion after sent email %s",
-                draft_id,
-            )
-    response_payload = {
-        "ok": bool(successes),
-        "email_id": draft_id,
-        "email_type": email_type,
-        "email_type_label": current_draft["email_type_label"],
-        "status": status,
-        "sent": successes,
-        "failed": failures,
-        "is_test": is_test,
-        "test_recipient": EMAIL_TEST_RECIPIENT if is_test else "",
-        "planned_activity_id": planned_activity_id,
-        "obligation_id": (email_obligation or {}).get("obligation_id", ""),
-        "planning_completion_saved": planning_completion_saved,
-    }
-    return jsonify(response_payload), (200 if successes else 502)
-
-
-def _event_semantic_key(event):
-    return email_event_key(
-        event.get("brevo_message_id"),
-        event.get("event_type"),
-        event.get("event_time"),
-        event.get("url"),
-        event.get("actual_email"),
-    )
-
-
-def _recipient_summary(recipient, event_rows):
-    """Derive summary fields from the append-only raw log, making retries idempotent."""
-    ordered = sorted(event_rows, key=lambda row: str(row.get("event_time") or ""))
-    times_by_type = defaultdict(list)
-    for event in ordered:
-        event_type = str(event.get("event_type") or "").strip().casefold()
-        if (
-            event_type == "opened"
-            and "transac-phishing-consumer" in str(event.get("payload_json") or "").casefold()
-        ):
-            # Brevo's own security scanner loads the tracking pixel immediately.
-            # Keep the raw event for audit, but do not count it as a customer open.
-            continue
-        event_time = str(event.get("event_time") or "").strip()
-        if event_time:
-            times_by_type[event_type].append(event_time)
-
-    updates = {
-        "delivered_at": (times_by_type["delivered"] or [""])[0],
-        "first_opened_at": (times_by_type["opened"] or [""])[0],
-        "last_opened_at": (times_by_type["opened"] or [""])[-1],
-        "open_count": len(times_by_type["opened"]),
-        "product_sheet_first_clicked_at": (times_by_type["product_sheet_clicked"] or [""])[0],
-        "product_sheet_last_clicked_at": (times_by_type["product_sheet_clicked"] or [""])[-1],
-        "product_sheet_click_count": len(times_by_type["product_sheet_clicked"]),
-        "stockfiller_first_clicked_at": (times_by_type["stockfiller_clicked"] or [""])[0],
-        "stockfiller_last_clicked_at": (times_by_type["stockfiller_clicked"] or [""])[-1],
-        "stockfiller_click_count": len(times_by_type["stockfiller_clicked"]),
-        "bounce_type": "",
-        "blocked_at": "",
-        "unsubscribed_at": (times_by_type["unsubscribed"] or [""])[-1],
-        "last_event_at": str(ordered[-1].get("event_time") or "") if ordered else "",
-    }
-    for event in ordered:
-        event_type = str(event.get("event_type") or "").strip().casefold()
-        if event_type in {"hardbounce", "invalid", "blocked", "spam"}:
-            updates["bounce_type"] = event_type
-        if event_type in {"blocked", "spam"}:
-            updates["blocked_at"] = str(event.get("event_time") or "")
-    return {**recipient, **updates}
-
-
-@serialized_crm_write
-def process_brevo_events(spreadsheet, sheets, payloads):
-    """Persist a batch with one read/append/update cycle and semantic deduplication."""
-    message_headers, message_rows = worksheet_snapshot(
-        sheets[EMAIL_MESSAGES_SHEET], expected_columns=EMAIL_MESSAGES_COLUMNS
-    )
-    recipient_headers, recipient_rows = worksheet_snapshot(
-        sheets[EMAIL_RECIPIENTS_SHEET], expected_columns=EMAIL_RECIPIENTS_COLUMNS
-    )
-    _, stored_event_rows = worksheet_snapshot(
-        sheets[EMAIL_EVENTS_SHEET], expected_columns=EMAIL_EVENTS_COLUMNS
-    )
-    messages_by_email_id = {row.get("email_id", ""): row for _, row in message_rows}
-    recipients_by_message_id = {
-        normalize_message_id(row.get("brevo_message_id")): (row_index, row)
-        for row_index, row in recipient_rows
-        if normalize_message_id(row.get("brevo_message_id"))
-    }
-    all_events = [row for _, row in stored_event_rows]
-    existing_keys = {_event_semantic_key(row) for row in all_events}
-    new_events = []
-    affected_message_ids = set()
-
-    for payload in payloads:
-        if not isinstance(payload, dict):
-            continue
-        message_id = normalize_message_id(
-            payload.get("message-id") or payload.get("messageId") or payload.get("message_id")
-        )
-        recipient_info = recipients_by_message_id.get(message_id)
-        recipient = recipient_info[1] if recipient_info else {}
-        email_id = recipient.get("email_id", "")
-        message = messages_by_email_id.get(email_id, {})
-        event_type = normalize_brevo_event(payload)
-        url = str(payload.get("link") or payload.get("url") or "").strip()
-        if event_type == "clicked":
-            event_type = classify_clicked_url(
-                url,
-                message.get("product_sheet_url", ""),
-                message.get("stockfiller_url", ""),
-            )
-        actual_email = recipient.get("actual_email") or payload.get("email", "")
-        event = {
-            "received_at": now_text(),
-            "event_time": brevo_event_time(payload),
-            "email_id": email_id,
-            "brevo_message_id": message_id,
-            "intended_email": recipient.get("intended_email", ""),
-            "actual_email": actual_email,
-            "event_type": event_type,
-            "url": url,
-            "payload_json": json.dumps(payload, ensure_ascii=False, sort_keys=True)[:45000],
-        }
-        event["event_key"] = _event_semantic_key(event)
-        if message_id:
-            affected_message_ids.add(message_id)
-        if event["event_key"] in existing_keys:
-            continue
-        existing_keys.add(event["event_key"])
-        new_events.append(event)
-        all_events.append(event)
-
-    if new_events:
-        event_sheet = sheets[EMAIL_EVENTS_SHEET]
-        append_dict_rows(
-            event_sheet,
-            EMAIL_EVENTS_COLUMNS,
-            new_events,
-            value_input_option="RAW",
-        )
-
-    events_by_message_id = defaultdict(list)
-    for event in all_events:
-        message_id = normalize_message_id(event.get("brevo_message_id"))
-        if message_id in affected_message_ids:
-            events_by_message_id[message_id].append(event)
-
-    recipient_updates = []
-    for message_id in affected_message_ids:
-        recipient_info = recipients_by_message_id.get(message_id)
-        if not recipient_info:
-            continue
-        row_index, recipient = recipient_info
-        recipient_updates.append((row_index, _recipient_summary(recipient, events_by_message_id[message_id])))
-    batch_update_sheet_rows(sheets[EMAIL_RECIPIENTS_SHEET], recipient_headers, recipient_updates)
-    return len(new_events)
-
-
-def process_brevo_event(spreadsheet, sheets, payload):
-    return bool(process_brevo_events(spreadsheet, sheets, [payload]))
-
-
-def _process_brevo_batch_with_retry(payloads):
-    def operation():
-        spreadsheet = get_spreadsheet_with_retry()
-        sheets = ensure_email_worksheets(spreadsheet)
-        with _brevo_processing_lock:
-            return process_brevo_events(spreadsheet, sheets, payloads)
-
-    return run_with_retry(operation, label="Brevo event batch")
-
-
-def _brevo_event_worker():
-    while True:
-        first = _brevo_event_queue.get()
-        batch = [first]
-        try:
-            # Small coalescing window greatly reduces Sheets calls during webhook bursts.
-            time.sleep(0.05)
-            while len(batch) < 100:
-                try:
-                    batch.append(_brevo_event_queue.get_nowait())
-                except Empty:
-                    break
-            _process_brevo_batch_with_retry(batch)
-        except Exception:
-            app.logger.exception("Brevo event batch failed after retries")
-        finally:
-            for _ in batch:
-                _brevo_event_queue.task_done()
-
-
-def fetch_brevo_events(message_id):
-    api_key = str(os.environ.get("BREVO_API_KEY", "")).strip()
-    if not api_key:
-        raise RuntimeError("BREVO_API_KEY is missing")
-    normalized_id = normalize_message_id(message_id)
-
-    def operation():
-        response = requests.get(
-            BREVO_EVENTS_URL,
-            headers={"api-key": api_key, "accept": "application/json"},
-            params={"messageId": f"<{normalized_id}>", "limit": 500, "sort": "asc"},
-            timeout=20,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        events = payload.get("events", []) if isinstance(payload, dict) else []
-        for event in events:
-            event.setdefault("messageId", normalized_id)
-        return events
-
-    return run_with_retry(operation, attempts=4, base_delay=1, label=f"Brevo API {normalized_id}")
-
-
-def reconcile_recent_brevo_events(*, days=None, max_recipients=None):
-    if not _brevo_reconcile_lock.acquire(blocking=False):
-        return {"ok": True, "status": "already_running"}
-    try:
-        days = int(days or BREVO_RECONCILE_DAYS)
-        max_recipients = int(max_recipients or BREVO_RECONCILE_MAX_RECIPIENTS)
-
-        def load_recent_recipients():
-            spreadsheet = get_spreadsheet_with_retry()
-            sheets = ensure_email_worksheets(spreadsheet)
-            return worksheet_snapshot(
-                sheets[EMAIL_RECIPIENTS_SHEET], expected_columns=EMAIL_RECIPIENTS_COLUMNS
-            )[1]
-
-        recipient_rows = run_with_retry(
-            load_recent_recipients, label="Brevo reconciliation Sheets read"
-        )
-        cutoff = stockholm_today() - timedelta(days=max(1, min(30, days)))
-        candidates = []
-        for _, recipient in recipient_rows:
-            message_id = normalize_message_id(recipient.get("brevo_message_id"))
-            sent_at = parse_datetime_value(recipient.get("sent_at"))
-            if (
-                message_id
-                and str(recipient.get("send_status") or "").casefold() == "sent"
-                and sent_at
-                and sent_at.date() >= cutoff
-            ):
-                candidates.append((sent_at, message_id))
-        candidates.sort(reverse=True)
-
-        fetched = []
-        failures = []
-        seen_message_ids = set()
-        for _, message_id in candidates:
-            if message_id in seen_message_ids or len(seen_message_ids) >= max_recipients:
-                continue
-            seen_message_ids.add(message_id)
-            try:
-                fetched.extend(fetch_brevo_events(message_id))
-            except Exception as exc:
-                failures.append({"message_id": message_id, "error": str(exc)[:250]})
-                app.logger.warning("Could not reconcile Brevo message %s: %s", message_id, exc)
-
-        inserted = _process_brevo_batch_with_retry(fetched) if fetched else 0
-        return {
-            "ok": True,
-            "status": "completed",
-            "checked_recipients": len(seen_message_ids),
-            "fetched_events": len(fetched),
-            "inserted_events": inserted,
-            "failures": failures,
-        }
-    finally:
-        _brevo_reconcile_lock.release()
-
-
-def _brevo_reconcile_worker():
-    while True:
-        time.sleep(BREVO_RECONCILE_INTERVAL_SECONDS)
-        try:
-            reconcile_recent_brevo_events()
-        except Exception:
-            app.logger.exception("Scheduled Brevo reconciliation failed")
-
-
-def start_brevo_background_workers():
-    global _brevo_workers_started
-    with _brevo_worker_start_lock:
-        if _brevo_workers_started:
-            return
-        threading.Thread(target=_brevo_event_worker, name="brevo-events", daemon=True).start()
-        threading.Thread(target=_brevo_reconcile_worker, name="brevo-reconcile", daemon=True).start()
-        _brevo_workers_started = True
-
-
-@app.route("/api/brevo/webhook/<secret>", methods=["POST"])
-def brevo_webhook(secret):
-    expected = str(os.environ.get("BREVO_WEBHOOK_SECRET", "")).strip()
-    if not expected:
-        return jsonify({"ok": False, "error": "webhook_not_configured"}), 503
-    if secret != expected:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    payload = request.get_json(silent=True)
-    events = payload if isinstance(payload, list) else [payload or {}]
-    start_brevo_background_workers()
-    queued = 0
-    try:
-        for event in events:
-            _brevo_event_queue.put_nowait(event)
-            queued += 1
-    except Full:
-        return jsonify({"ok": False, "error": "event_queue_full", "queued": queued}), 503
-    return jsonify({"ok": True, "queued": queued}), 202
-
-
-@app.route("/api/brevo/reconcile/<secret>", methods=["POST"])
-def brevo_reconcile(secret):
-    expected = str(os.environ.get("BREVO_WEBHOOK_SECRET", "")).strip()
-    if not expected:
-        return jsonify({"ok": False, "error": "webhook_not_configured"}), 503
-    if secret != expected:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    result = reconcile_recent_brevo_events(
-        days=request.args.get("days", type=int),
-        max_recipients=request.args.get("max_recipients", type=int),
-    )
-    return jsonify(result), (202 if result.get("status") == "already_running" else 200)
 
 
 @app.route("/customers", methods=["GET"])
@@ -6080,166 +4525,6 @@ def _timeline_contact_item(contact):
     }
 
 
-def _email_recipient_identity(recipient):
-    return normalize_email(
-        recipient.get("intended_email") or recipient.get("actual_email")
-    )
-
-
-def _email_event_datetime(value):
-    return parse_datetime_value(value)
-
-
-def _latest_email_recipient_event(recipient_rows, field):
-    values = [
-        _email_event_datetime(recipient.get(field))
-        for recipient in recipient_rows
-    ]
-    values = [value for value in values if value]
-    return (
-        max(values).isoformat(sep=" ", timespec="seconds")
-        if values else ""
-    )
-
-
-def build_live_email_records(message_rows, recipient_rows):
-    """Return one normalized record per live logical email proposal.
-
-    Test messages and failed recipients are intentionally excluded. Recipient and
-    event sets are unique, so repeated Brevo opens/clicks never inflate the
-    business-level metrics.
-    """
-    recipients_by_email_id = defaultdict(list)
-    for recipient in recipient_rows:
-        email_id = str(recipient.get("email_id", "")).strip()
-        if email_id:
-            recipients_by_email_id[email_id].append(recipient)
-
-    records = []
-    for message in message_rows:
-        if is_yes(message.get("is_test")):
-            continue
-        if str(message.get("status", "")).strip().casefold() not in {"sent", "partial"}:
-            continue
-
-        email_id = str(message.get("email_id", "")).strip()
-        customer = str(message.get("customer", "")).strip()
-        customer_id = str(message.get("customer_id", "")).strip()
-        customer_number = str(message.get("customer_number", "")).strip()
-        customer_key = normalize_key(customer)
-        sent_at = parse_datetime_value(message.get("sent_at"))
-        if not email_id or not customer_key or not sent_at:
-            continue
-
-        sent_recipients = [
-            row for row in recipients_by_email_id.get(email_id, [])
-            if str(row.get("send_status", "")).strip().casefold() == "sent"
-        ]
-        recipient_labels = {}
-        delivered_recipients = set()
-        opened_recipients = set()
-        product_clicked_recipients = set()
-        stockfiller_clicked_recipients = set()
-        delivered_times = []
-        opened_times = []
-        first_opened_times = []
-        product_click_times = []
-        stockfiller_click_times = []
-        product_first_click_times = []
-        stockfiller_first_click_times = []
-
-        for recipient in sent_recipients:
-            identity = _email_recipient_identity(recipient)
-            if not identity:
-                continue
-            recipient_labels.setdefault(
-                identity,
-                str(recipient.get("intended_email") or recipient.get("actual_email") or "").strip(),
-            )
-
-            delivered_at = _email_event_datetime(recipient.get("delivered_at"))
-            first_opened_at = _email_event_datetime(
-                recipient.get("first_opened_at")
-            )
-            opened_at = (
-                _email_event_datetime(recipient.get("last_opened_at"))
-                or first_opened_at
-            )
-            first_opened_at = first_opened_at or opened_at
-            product_clicked_at = _email_event_datetime(recipient.get("product_sheet_last_clicked_at"))
-            stockfiller_clicked_at = _email_event_datetime(recipient.get("stockfiller_last_clicked_at"))
-            product_first_clicked_at = _email_event_datetime(
-                recipient.get("product_sheet_first_clicked_at")
-            ) or product_clicked_at
-            stockfiller_first_clicked_at = _email_event_datetime(
-                recipient.get("stockfiller_first_clicked_at")
-            ) or stockfiller_clicked_at
-
-            opened = parse_number_value(recipient.get("open_count"), 0) > 0 and bool(opened_at)
-            product_clicked = (
-                parse_number_value(recipient.get("product_sheet_click_count"), 0) > 0
-                and bool(product_clicked_at)
-            )
-            stockfiller_clicked = (
-                parse_number_value(recipient.get("stockfiller_click_count"), 0) > 0
-                and bool(stockfiller_clicked_at)
-            )
-
-            # A human open or click is also conclusive evidence that the message
-            # reached the recipient, even if the delivered webhook arrived late.
-            if delivered_at or opened or product_clicked or stockfiller_clicked:
-                delivered_recipients.add(identity)
-            if delivered_at:
-                delivered_times.append(delivered_at)
-            if opened:
-                opened_recipients.add(identity)
-                if opened_at:
-                    opened_times.append(opened_at)
-                if first_opened_at:
-                    first_opened_times.append(first_opened_at)
-            if product_clicked:
-                product_clicked_recipients.add(identity)
-                product_click_times.append(product_clicked_at)
-                product_first_click_times.append(product_first_clicked_at)
-            if stockfiller_clicked:
-                stockfiller_clicked_recipients.add(identity)
-                stockfiller_click_times.append(stockfiller_clicked_at)
-                stockfiller_first_click_times.append(stockfiller_first_clicked_at)
-
-        if not recipient_labels:
-            continue
-
-        records.append({
-            "email_id": email_id,
-            "customer": customer,
-            "customer_key": customer_key,
-            "customer_id": customer_id,
-            "customer_number": customer_number,
-            "proposal_type": normalize_proposal_type(message.get("email_type")),
-            "sent_at": sent_at,
-            "message": message,
-            "recipients": sent_recipients,
-            "recipient_labels": recipient_labels,
-            "sent_recipients": set(recipient_labels),
-            "delivered_recipients": delivered_recipients,
-            "opened_recipients": opened_recipients,
-            "product_clicked_recipients": product_clicked_recipients,
-            "stockfiller_clicked_recipients": stockfiller_clicked_recipients,
-            "delivered_at": max(delivered_times) if delivered_times else None,
-            "opened_at": max(opened_times) if opened_times else None,
-            "first_opened_at": min(first_opened_times)
-            if first_opened_times else None,
-            "product_clicked_at": max(product_click_times) if product_click_times else None,
-            "stockfiller_clicked_at": max(stockfiller_click_times) if stockfiller_click_times else None,
-            "product_first_clicked_at": min(product_first_click_times)
-            if product_first_click_times else None,
-            "stockfiller_first_clicked_at": min(stockfiller_first_click_times)
-            if stockfiller_first_click_times else None,
-        })
-
-    return sorted(records, key=lambda record: record["sent_at"])
-
-
 def group_customer_orders(order_rows):
     """Collapse product rows into logical orders before attribution."""
     grouped = {}
@@ -6301,517 +4586,17 @@ def group_customer_orders(order_rows):
     )
 
 
-def attribute_orders_to_live_emails(live_records, grouped_orders, window_days=EMAIL_ORDER_ATTRIBUTION_DAYS):
-    """Attribute each order once to the latest eligible live proposal."""
-    attributed = defaultdict(list)
-    for order in grouped_orders:
-        eligible = [
-            record for record in live_records
-            if customer_identity_matches(
-                record.get("customer"),
-                record.get("customer_number"),
-                order.get("customer"),
-                order.get("customer_number"),
-                record.get("customer_id"),
-                order.get("customer_id"),
-            )
-            and 0 <= (order["date"] - record["sent_at"].date()).days <= window_days
-        ]
-        if not eligible:
-            continue
-        latest = max(eligible, key=lambda record: record["sent_at"])
-        attributed[latest["email_id"]].append(order)
-    return attributed
-
-
-def build_email_engagement_snapshot(
-    message_rows, recipient_rows, order_rows, today=None, customers=(), as_of=None
-):
-    """Return the latest live email outcome for every customer.
-
-    Rank 1 is the most actionable. The click filter is deliberately delayed for
-    three full calendar days so sellers do not follow up immediately after a
-    recipient has shown intent.
-    """
-    from priority import _canonicalize_rows, _known_at
-    today = today or stockholm_today()
-    current = parse_planning_instant(as_of) if as_of is not None else datetime.combine(today, datetime_time.max, tzinfo=STOCKHOLM_ZONE)
-    today = current.date()
-    if customers:
-        message_rows = _canonicalize_rows(message_rows, customers, name_field="customer", number_field="customer_number")
-        order_rows = _canonicalize_rows(order_rows, customers, name_field="Customer", number_field="Customer number")
-    message_rows = [row for row in message_rows if not row.get("_identity_unresolved") and _known_at(row, current)
-                    and (not parse_planning_instant(row.get("sent_at")) or parse_planning_instant(row.get("sent_at")) <= current)]
-    order_rows = [row for row in order_rows if not row.get("_identity_unresolved") and _known_at(row, current)
-                  and (not parse_planning_instant(row.get("Order date")) or parse_planning_instant(row.get("Order date")) <= current)]
-    visible_recipients = []
-    for original in recipient_rows:
-        if not _known_at(original, current):
-            continue
-        row = dict(original)
-        for name, value in original.items():
-            when = parse_planning_instant(value) if name.endswith("_at") else None
-            if when and when > current:
-                row[name] = ""
-        for prefix, count in (("", "open_count"), ("product_sheet_", "product_sheet_click_count"), ("stockfiller_", "stockfiller_click_count")):
-            first_field = prefix + ("first_clicked_at" if prefix else "first_opened_at")
-            last_field = prefix + ("last_clicked_at" if prefix else "last_opened_at")
-            if original.get(last_field) and not row.get(last_field):
-                row[count] = 1 if row.get(first_field) else 0
-                # The known first event is also the latest event known at this
-                # snapshot. Keep its onset/identity when a later aggregate
-                # timestamp is outside as_of; never import that future event.
-                row[last_field] = row.get(first_field) or ""
-        visible_recipients.append(row)
-    recipient_rows = visible_recipients
-    records = build_live_email_records(message_rows, recipient_rows)
-    if customers:
-        by_id = {
-            normalize_key(row.get("customer_id")): row
-            for row in customers if normalize_key(row.get("customer_id"))
-        }
-        by_number = {
-            normalize_key(row.get("customer_number")): row
-            for row in customers if normalize_key(row.get("customer_number"))
-        }
-        name_matches = defaultdict(list)
-        for row in customers:
-            if normalize_key(row.get("customer")):
-                name_matches[normalize_key(row.get("customer"))].append(row)
-        canonical_records = []
-        for record in records:
-            master = None
-            record_id = normalize_key(record.get("customer_id"))
-            record_number = normalize_key(record.get("customer_number"))
-            if record_id:
-                master = by_id.get(record_id)
-                if master is None:
-                    continue
-            if master is None and record_number:
-                master = by_number.get(record_number)
-            if master is None:
-                matches = name_matches.get(record.get("customer_key"), [])
-                master = (
-                    matches[0]
-                    if not record_id and not record_number and len(matches) == 1
-                    else None
-                )
-            if master is None:
-                continue
-            canonical_records.append({
-                **record,
-                "customer_id": str(master.get("customer_id") or "").strip(),
-                "customer_number": str(master.get("customer_number") or "").strip(),
-                "customer_key": normalize_key(master.get("customer")),
-            })
-        records = canonical_records
-    attributed = attribute_orders_to_live_emails(records, group_customer_orders(order_rows))
-    latest_by_customer = {}
-    for record in records:
-        identity_key = (
-            f"id:{normalize_key(record.get('customer_id'))}"
-            if normalize_key(record.get("customer_id"))
-            else (
-                f"number:{normalize_key(record.get('customer_number'))}"
-                if normalize_key(record.get("customer_number"))
-            else record["customer_key"]
-            )
-        )
-        current = latest_by_customer.get(identity_key)
-        if current is None or record["sent_at"] > current["sent_at"]:
-            latest_by_customer[identity_key] = record
-
-    snapshots = {}
-    for identity_key, record in latest_by_customer.items():
-        status = ""
-        label = ""
-        priority = None
-        event_at = record["sent_at"]
-        has_order = bool(attributed.get(record["email_id"]))
-
-        if has_order:
-            status = "ordered_within_10_days"
-            label = "Order inom 10 dagar"
-            priority = 0
-            event_at = max(
-                datetime.combine(order["date"], datetime.min.time())
-                for order in attributed[record["email_id"]]
-            )
-        elif record["stockfiller_clicked_recipients"]:
-            status = "stockfiller_clicked_no_order"
-            label = "Stockfiller-klick utan order"
-            priority = 1
-            event_at = record["stockfiller_clicked_at"] or record["sent_at"]
-        elif record["product_clicked_recipients"]:
-            status = "product_sheet_clicked_no_order"
-            label = "Produktbladsklick utan order"
-            priority = 2
-            event_at = record["product_clicked_at"] or record["sent_at"]
-        elif record["opened_recipients"]:
-            status = "opened_no_click"
-            label = "Öppnat men inte klickat"
-            priority = 3
-            event_at = record["opened_at"] or record["sent_at"]
-        elif record["delivered_recipients"]:
-            status = "delivered_no_activity"
-            label = "Levererat men ingen aktivitet"
-            priority = 4
-            event_at = record["delivered_at"] or record["sent_at"]
-
-        clicked_without_order = status in {
-            "stockfiller_clicked_no_order", "product_sheet_clicked_no_order"
-        }
-        wait_days_remaining = 0
-        if clicked_without_order or status == "opened_no_click":
-            if status == "stockfiller_clicked_no_order":
-                first_event_at = record["stockfiller_first_clicked_at"] or event_at
-                wait_days = EMAIL_CLICK_FOLLOWUP_WAIT_DAYS
-            elif status == "product_sheet_clicked_no_order":
-                first_event_at = record["product_first_clicked_at"] or event_at
-                wait_days = EMAIL_CLICK_FOLLOWUP_WAIT_DAYS
-            else:
-                first_event_at = record["first_opened_at"] or event_at
-                wait_days = EMAIL_OPEN_FOLLOWUP_WAIT_DAYS
-            days_since_event = max(0, (today - first_event_at.date()).days)
-            wait_days_remaining = max(0, wait_days - days_since_event)
-            if clicked_without_order:
-                clicked_without_order = wait_days_remaining == 0
-
-        proposal_type = normalize_proposal_type(record.get("proposal_type"))
-
-        snapshots[identity_key] = {
-            "customer_id": record.get("customer_id", ""),
-            "customer_number": record.get("customer_number", ""),
-            "customer_key": record.get("customer_key", ""),
-            "email_followup_status": status,
-            "email_followup_label": label,
-            "email_followup_priority": priority,
-            "email_followup_sent_at": record["sent_at"].isoformat(
-                sep=" ", timespec="seconds"
-            ),
-            "email_followup_last_event_at": event_at.isoformat(sep=" ", timespec="seconds") if event_at else "",
-            "email_click_without_order": clicked_without_order,
-            "email_clicked_without_order": clicked_without_order,
-            "email_followup_wait_days_remaining": wait_days_remaining,
-            "email_order_within_10_days": has_order,
-            "email_followup_email_id": record["email_id"],
-            "email_followup_proposal_type": proposal_type,
-            "email_followup_proposal_label": EMAIL_PROPOSAL_TYPES[proposal_type],
-            "email_first_opened_at": (
-                record["first_opened_at"].isoformat(sep=" ", timespec="seconds")
-                if record.get("first_opened_at") else ""
-            ),
-            "email_stockfiller_first_clicked_at": (
-                record["stockfiller_first_clicked_at"].isoformat(sep=" ", timespec="seconds")
-                if record.get("stockfiller_first_clicked_at") else ""
-            ),
-            "email_product_sheet_first_clicked_at": (
-                record["product_first_clicked_at"].isoformat(sep=" ", timespec="seconds")
-                if record.get("product_first_clicked_at") else ""
-            ),
-        }
-
-    return snapshots
-
-
-def email_engagement_for_customer(snapshots, customer):
-    customer_id = normalize_key(customer.get("customer_id"))
-    customer_number = normalize_key(customer.get("customer_number"))
-    customer_name = normalize_key(customer.get("customer"))
-    values = list((snapshots or {}).values())
-    if customer_id:
-        match = next((row for row in values if normalize_key(row.get("customer_id")) == customer_id), None)
-        if match:
-            return match
-    if customer_number:
-        match = next((row for row in values if normalize_key(row.get("customer_number")) == customer_number), None)
-        if match:
-            return match
-    name_matches = [row for row in values if normalize_key(row.get("customer_key")) == customer_name]
-    return name_matches[0] if customer_name and len(name_matches) == 1 else {}
-
-
-def _email_rate(numerator, denominator):
-    return round((numerator / denominator) * 100, 1) if denominator else 0.0
-
-
-def build_email_performance(message_rows, recipient_rows, order_rows, included_customer_keys=None, today=None):
-    """Build cumulative, live-only email KPIs using stores as primary grain."""
-    records = build_live_email_records(message_rows, recipient_rows)
-    if included_customer_keys is not None:
-        included = {normalize_key(key) for key in included_customer_keys}
-        records = [record for record in records if record["customer_key"] in included]
-
-    grouped_orders = group_customer_orders(order_rows)
-    attributed = attribute_orders_to_live_emails(records, grouped_orders)
-    snapshots = build_email_engagement_snapshot(
-        [record["message"] for record in records], recipient_rows, order_rows, today=today
-    )
-
-    sent_stores = {record["customer_key"] for record in records}
-    delivered_stores = {
-        record["customer_key"] for record in records if record["delivered_recipients"]
-    }
-    opened_stores = {
-        record["customer_key"] for record in records if record["opened_recipients"]
-    }
-    product_clicked_stores = {
-        record["customer_key"] for record in records if record["product_clicked_recipients"]
-    }
-    stockfiller_clicked_stores = {
-        record["customer_key"] for record in records if record["stockfiller_clicked_recipients"]
-    }
-
-    delivered_email_keys = set()
-    sent_email_keys = set()
-    opened_recipient_keys = set()
-    product_recipient_keys = set()
-    stockfiller_recipient_keys = set()
-    record_by_email_id = {record["email_id"]: record for record in records}
-    for record in records:
-        for recipient in record["sent_recipients"]:
-            sent_email_keys.add((record["email_id"], recipient))
-        for recipient in record["delivered_recipients"]:
-            delivered_email_keys.add((record["email_id"], recipient))
-        for recipient in record["opened_recipients"]:
-            opened_recipient_keys.add((record["customer_key"], recipient))
-        for recipient in record["product_clicked_recipients"]:
-            product_recipient_keys.add((record["customer_key"], recipient))
-        for recipient in record["stockfiller_clicked_recipients"]:
-            stockfiller_recipient_keys.add((record["customer_key"], recipient))
-
-    ordered_email_ids = {email_id for email_id, orders in attributed.items() if orders}
-    ordered_stores = {
-        record_by_email_id[email_id]["customer_key"]
-        for email_id in ordered_email_ids if email_id in record_by_email_id
-    }
-    attributed_orders = [order for orders in attributed.values() for order in orders]
-    order_value_by_currency = defaultdict(float)
-    attributed_dfp = 0.0
-    for order in attributed_orders:
-        if order["currency"]:
-            order_value_by_currency[order["currency"]] += order["total"]
-        attributed_dfp += order["dfp"]
-
-    followup_counts = defaultdict(int)
-    for customer_key in sent_stores:
-        status = snapshots.get(customer_key, {}).get("email_followup_status", "")
-        if status:
-            followup_counts[status] += 1
-
-    store_count = len(sent_stores)
-    return {
-        "period_label": "Alla liveutskick",
-        "attribution_days": EMAIL_ORDER_ATTRIBUTION_DAYS,
-        "click_followup_wait_days": EMAIL_CLICK_FOLLOWUP_WAIT_DAYS,
-        "live_email_count": len(records),
-        "sent_email_count": len(sent_email_keys),
-        "delivered_email_count": len(delivered_email_keys),
-        "unique_store_count": store_count,
-        "delivered_store_count": len(delivered_stores),
-        "opened_store_count": len(opened_stores),
-        "opened_store_rate": _email_rate(len(opened_stores), store_count),
-        "product_clicked_store_count": len(product_clicked_stores),
-        "product_clicked_store_rate": _email_rate(len(product_clicked_stores), store_count),
-        "stockfiller_clicked_store_count": len(stockfiller_clicked_stores),
-        "stockfiller_clicked_store_rate": _email_rate(len(stockfiller_clicked_stores), store_count),
-        "opened_recipient_count": len(opened_recipient_keys),
-        "product_clicked_recipient_count": len(product_recipient_keys),
-        "stockfiller_clicked_recipient_count": len(stockfiller_recipient_keys),
-        "ordered_store_count": len(ordered_stores),
-        "ordered_store_rate": _email_rate(len(ordered_stores), store_count),
-        "attributed_order_count": len(attributed_orders),
-        "attributed_order_value_by_currency": {
-            currency: round(value, 2)
-            for currency, value in sorted(order_value_by_currency.items())
-        },
-        "attributed_dfp": round(attributed_dfp, 2),
-        "followup_counts": dict(followup_counts),
-    }
-
-
 def build_customer_timeline(
-    customer_name,
-    order_rows,
-    contact_rows,
-    sheets,
-    customer_number="",
-    *,
-    customer_record=None,
-    customers=None,
-    customer_lookup=None,
+    customer_name, order_rows, contact_rows, customer_number="", *,
+    customer_record=None, customers=None, customer_lookup=None,
 ):
-    """Build the customer-specific, user-facing activity stream.
-
-    Raw delivery, bounce and other technical Brevo events remain in email_events;
-    this projection intentionally exposes only the V1 events approved for the UI.
-    """
+    """Return recorded contact history; no provider event/attribution tables."""
     customer_key = normalize_key(customer_name)
-    timeline = []
-
     canonical_rows = customer_record is not None and customers is not None
-    for contact in contact_rows:
-        if not canonical_rows and normalize_key(contact.get("customer")) != customer_key:
-            continue
-        # Email proposal sends have their own richer timeline item below.
-        if str(contact.get("email_id", "")).strip():
-            continue
-        timeline.append(_timeline_contact_item(contact))
-
-    message_rows = worksheet_to_dicts(
-        sheets[EMAIL_MESSAGES_SHEET], expected_columns=EMAIL_MESSAGES_COLUMNS
-    ) if sheets.get(EMAIL_MESSAGES_SHEET) is not None else []
-    recipient_rows = worksheet_to_dicts(
-        sheets[EMAIL_RECIPIENTS_SHEET], expected_columns=EMAIL_RECIPIENTS_COLUMNS
-    ) if sheets.get(EMAIL_RECIPIENTS_SHEET) is not None else []
-    if customer_record is not None and customers is not None:
-        message_rows = related_rows_for_customer(
-            message_rows,
-            customers,
-            customer_record,
-            customer_lookup=customer_lookup,
-        )
-        visible_email_ids = {
-            str(message.get("email_id") or "").strip()
-            for message in message_rows
-        }
-        recipient_rows = [
-            recipient for recipient in recipient_rows
-            if str(recipient.get("email_id") or "").strip()
-            in visible_email_ids
-        ]
-    live_records = build_live_email_records(message_rows, recipient_rows)
-    if not canonical_rows:
-        live_records = [
-            record for record in live_records
-            if customer_identity_matches(
-                customer_name,
-                customer_number,
-                record.get("customer"),
-                record.get("customer_number"),
-            )
-        ]
-    grouped_orders = group_customer_orders(order_rows)
-    if not canonical_rows:
-        grouped_orders = [
-            order for order in grouped_orders
-            if customer_identity_matches(
-                customer_name,
-                customer_number,
-                order.get("customer"),
-                order.get("customer_number"),
-            )
-        ]
-    attributed_orders = attribute_orders_to_live_emails(
-        live_records,
-        grouped_orders,
-    )
-
-    event_specs = (
-        ("opened_recipients", "opened_at", "email_proposal_opened", "Öppnat", "secondary"),
-        ("product_clicked_recipients", "product_clicked_at", "product_sheet_clicked", "Produktblad klickat", "primary"),
-        ("stockfiller_clicked_recipients", "stockfiller_clicked_at", "stockfiller_clicked", "Stockfiller klickat", "primary"),
-    )
-    for record in live_records:
-        message = record["message"]
-        partial = str(message.get("status", "")).strip().casefold() == "partial"
-        email_type = normalize_proposal_type(message.get("email_type"))
-        type_label = EMAIL_PROPOSAL_TYPES[email_type]
-        recipient_label = ", ".join(
-            record["recipient_labels"].get(identity, identity)
-            for identity in sorted(record["sent_recipients"])
-        )
-        recipient_tracking = []
-        for identity in sorted(record["sent_recipients"]):
-            identity_rows = [
-                recipient
-                for recipient in record["recipients"]
-                if _email_recipient_identity(recipient) == identity
-            ]
-            recipient_tracking.append({
-                "email": record["recipient_labels"].get(identity, identity),
-                "last_opened_at": _latest_email_recipient_event(
-                    identity_rows, "last_opened_at"
-                ),
-                "product_sheet_last_clicked_at": _latest_email_recipient_event(
-                    identity_rows,
-                    "product_sheet_last_clicked_at"
-                ),
-                "stockfiller_last_clicked_at": _latest_email_recipient_event(
-                    identity_rows,
-                    "stockfiller_last_clicked_at"
-                ),
-            })
-        timeline.append({
-            "date_time": message.get("sent_at", ""),
-            "event_type": "email_proposal_sent",
-            "importance": "primary",
-            "title": f"{type_label} skickad" + (" delvis" if partial else ""),
-            "sales_person": message.get("sender_name", ""),
-            "channel": "Mejl",
-            "result": f"Mejlförslag skickat – {type_label}" + (" delvis" if partial else ""),
-            "recipient": recipient_label,
-            "comment": message.get("subject", ""),
-            "email_id": record["email_id"],
-            "recipient_tracking": recipient_tracking,
-            "details": [
-                {"label": "Ämne", "value": message.get("subject", "") or "—"},
-            ],
-        })
-
-        for recipients_field, time_field, event_type, label, importance in event_specs:
-            identities = record[recipients_field]
-            event_time = record[time_field]
-            if not identities or not event_time:
-                continue
-            event_recipients = ", ".join(
-                record["recipient_labels"].get(identity, identity)
-                for identity in sorted(identities)
-            )
-            timeline.append({
-                "date_time": event_time.isoformat(sep=" ", timespec="seconds"),
-                "event_type": event_type,
-                "importance": importance,
-                "title": label,
-                "sales_person": message.get("sender_name", ""),
-                "channel": "Mejl",
-                "result": label,
-                "recipient": event_recipients,
-                "comment": "",
-                "email_id": record["email_id"],
-                "details": [],
-            })
-
-    for record in live_records:
-        attributed_message = record["message"]
-        for order in attributed_orders.get(record["email_id"], []):
-            value = round(order["total"], 2)
-            value_text = f"{value:,.2f}".replace(",", " ").replace(".", ",")
-            if order["currency"]:
-                value_text += f" {order['currency']}"
-            details = [
-                {"label": "Orderreferens", "value": order["reference"] or "—"},
-                {"label": "Ordervärde", "value": value_text},
-            ]
-            if order["dfp"]:
-                details.append({
-                    "label": "Antal DFP",
-                    "value": str(int(order["dfp"]) if order["dfp"].is_integer() else order["dfp"]),
-                })
-            timeline.append({
-                "date_time": f"{order['date'].isoformat()} 12:00:00",
-                "event_type": "subsequent_order",
-                "importance": "primary",
-                "title": "Efterföljande order",
-                "sales_person": attributed_message.get("sender_name", ""),
-                "channel": "Order",
-                "result": "Order inom 10 dagar",
-                "recipient": "",
-                "comment": f"Order {order['reference']}" if order["reference"] else "Ny order",
-                "email_id": record["email_id"],
-                "details": details,
-            })
-
+    timeline = [
+        _timeline_contact_item(contact) for contact in contact_rows
+        if canonical_rows or normalize_key(contact.get("customer")) == customer_key
+    ]
     timeline.sort(key=_timeline_sort_value, reverse=True)
     return timeline
 
@@ -7005,12 +4790,10 @@ def get_customer_stats(customer_name):
         order_rows=order_rows,
     )
 
-    sheets = read_email_worksheets(spreadsheet)
     timeline = build_customer_timeline(
         customer_name,
         order_rows,
         contact_rows,
-        sheets,
         customer_number=customer_number,
         customer_record=customer,
         customers=customers,
@@ -7034,8 +4817,6 @@ def build_current_priority_snapshot(
     customers,
     order_rows,
     contact_rows,
-    message_rows,
-    recipient_rows,
     today,
     planned_activity_rows=(),
     responsible=None,
@@ -7076,9 +4857,6 @@ def build_current_priority_snapshot(
         contact_features = build_contact_features(contact_rows, order_features, customers=customers, as_of=as_of)
     if prepared_features is not None:
         prepared_features.update(order_features=order_features, contact_features=contact_features)
-    email_engagement_by_customer = build_email_engagement_snapshot(
-        message_rows, recipient_rows, order_rows, today=today, customers=customers, as_of=as_of
-    )
     # All source features and global V3.5 benchmark inputs stay portfolio-wide.
     # Only the final per-store scoring loop is restricted for route validation.
     scoring_customers = customers if customer_ids is None else [
@@ -7094,7 +4872,7 @@ def build_current_priority_snapshot(
         None,
         today,
         limit=len(customers),
-        email_features=email_engagement_by_customer,
+
         planned_activities=planned_activity_rows,
         now=as_of,
         as_of=as_of,
@@ -7111,7 +4889,7 @@ def build_current_priority_snapshot(
             customer for customer in priority_customers
             if normalize_key(customer.get("sales_person")) == responsible_key
         ]
-    return priority_customers, email_engagement_by_customer
+    return priority_customers
 
 
 def priority_planned_activity_signature(rows):
@@ -7257,9 +5035,6 @@ def get_authoritative_priority_snapshot(
         customers = get_customer_rows(spreadsheet)
         order_rows = get_order_rows(spreadsheet)
         contact_rows = get_contact_rows(spreadsheet)
-        message_rows, recipient_rows, _events = get_email_rows(
-            spreadsheet, include_events=False
-        )
         record_performance_step("priority.source_rows", source_started, len(customers))
         # Resolve calendar ownership from one cached users snapshot. Old
         # installations without a users sheet retain the exact-match fallback;
@@ -7269,12 +5044,12 @@ def get_authoritative_priority_snapshot(
             users = get_user_rows(spreadsheet)
         except (WorksheetNotFound, AttributeError):
             pass
-        # Always derive order/contact/obligation/email features and name
+        # Always derive order/contact/obligation features and name
         # identity from the full portfolio before scoring the route subset.
         # A filtered raw-input universe changes V3.5 population priors.
         with performance_step("priority.source_version"):
             source_inputs = [
-                customers, order_rows, contact_rows, message_rows, recipient_rows,
+                customers, order_rows, contact_rows,
                 planned_activity_rows, state_events, users,
             ]
             source_version = canonical_payload_fingerprint(source_inputs) if cache_enabled else ""
@@ -7309,12 +5084,12 @@ def get_authoritative_priority_snapshot(
                 customers, contact_rows, planned_activity_rows, state_events,
                 as_of=as_of, owner_user_names=owner_names, order_rows=order_rows, order_features=order_features)
         scoring_started = time.perf_counter()
-        priorities, email_snapshot = ([], {}) if state_only else build_current_priority_snapshot(
+        priorities = [] if state_only else build_current_priority_snapshot(
             customers=customers,
             order_rows=order_rows,
             contact_rows=contact_rows,
-            message_rows=message_rows,
-            recipient_rows=recipient_rows,
+
+
             today=today,
             planned_activity_rows=planned_activity_rows or (),
             users=users,
@@ -7335,12 +5110,9 @@ def get_authoritative_priority_snapshot(
             "snapshot_created_at": as_of.isoformat(timespec="seconds"),
             "customer_state": state,
             "customer_state_events": state_events,
-            "email_engagement": email_snapshot,
             "customers": customers,
             "order_rows": order_rows,
             "contact_rows": contact_rows,
-            "message_rows": message_rows,
-            "recipient_rows": recipient_rows,
             "planned_activity_rows": list(planned_activity_rows or ()),
         }
         current_dependency_signature = (
@@ -7662,7 +5434,6 @@ def append_customer_state_event(spreadsheet, *, kind, entity_id, customer, owner
     return row
 
 
-
 def enrich_customer_state_priorities(priorities, state, events, owner_names, *, now):
     for priority in priorities:
         cid = str(priority.get("customer_id") or "").strip()
@@ -7857,29 +5628,6 @@ def build_customer_insights_response(spreadsheet, today, user, global_snapshot):
         user,
         customer_lookup=customer_lookup,
     )
-    all_message_rows = global_snapshot["message_rows"]
-    all_recipient_rows = global_snapshot["recipient_rows"]
-    message_rows = all_message_rows
-    recipient_rows = all_recipient_rows
-    message_rows = accessible_related_rows(
-        message_rows,
-        all_customers,
-        user,
-        customer_lookup=customer_lookup,
-    )
-    if not user_is_admin(user):
-        visible_email_ids = {
-            str(message.get("email_id") or "").strip()
-            for message in message_rows
-        }
-        recipient_rows = [
-            recipient for recipient in recipient_rows
-            if str(recipient.get("email_id") or "").strip()
-            in visible_email_ids
-        ]
-    latest_live_proposals = latest_live_email_proposals_by_customer(message_rows)
-    blocked_recipients = blocked_recipient_reasons(recipient_rows)
-
     # Latest order date and order count per customer
     all_order_rows = global_snapshot["order_rows"]
     order_rows = accessible_related_rows(
@@ -7911,7 +5659,6 @@ def build_customer_insights_response(spreadsheet, today, user, global_snapshot):
 
     priority_started = time.perf_counter()
     priority_customers = global_snapshot["priorities"]
-    email_engagement_by_customer = global_snapshot["email_engagement"]
     accessible_customer_ids = {
         str(customer.get("customer_id") or "").strip()
         for customer in customers
@@ -7972,33 +5719,6 @@ def build_customer_insights_response(spreadsheet, today, user, global_snapshot):
         )
         missad = bool(priority.get("missad_uppfoljning", False))
         customer = customers_by_name.get(normalize_key(name), {"customer": name})
-        has_prior_order = bool(priority.get("order_count", 0) or name in order_references)
-        days_since_delivery = (today - ld).days if ld else None
-        email_type = (
-            "new_customer"
-            if not has_prior_order
-            else "reminder"
-            if ld and days_since_delivery <= EMAIL_PROPOSAL_RECENT_DELIVERY_DAYS
-            else "reactivation"
-        )
-        relationship = {
-            "email_type": email_type,
-            "email_type_label": EMAIL_PROPOSAL_TYPES[email_type],
-            "latest_delivery_date": latest_delivery_date,
-            "days_since_delivery": days_since_delivery,
-            "has_prior_order": has_prior_order,
-        }
-        email_proposal = build_email_proposal_status(
-            customer,
-            priority,
-            relationship,
-            latest_live_proposals,
-            blocked_recipients,
-            today,
-        )
-        email_engagement = email_engagement_for_customer(
-            email_engagement_by_customer, customer
-        )
         insights[name] = {
             "missad_uppfoljning": missad,
             "customer_risk": risk,
@@ -8069,29 +5789,7 @@ def build_customer_insights_response(spreadsheet, today, user, global_snapshot):
             "follow_up_due": priority.get("follow_up_due", False),
             "recommended_channel": priority.get("recommended_channel", "avvakta"),
             "has_order_after_latest_contact": priority.get("has_order_after_latest_contact", False),
-            "email_proposal_due": email_proposal["due"],
-            "email_proposal_type": email_proposal["email_type"],
-            "email_proposal_type_label": email_proposal["email_type_label"],
-            "email_proposal_reason": email_proposal["reason"],
-            "email_proposal_blockers": email_proposal["blockers"],
-            "email_proposal_recipient_count": email_proposal["eligible_recipient_count"],
-            "email_proposal_latest_sent_at": email_proposal["latest_sent_at"],
-            "email_followup_status": email_engagement.get("email_followup_status", ""),
-            "email_followup_label": email_engagement.get("email_followup_label", ""),
-            "email_followup_priority": email_engagement.get("email_followup_priority"),
-            "email_followup_sent_at": email_engagement.get("email_followup_sent_at", ""),
-            "email_followup_last_event_at": email_engagement.get("email_followup_last_event_at", ""),
-            "email_click_without_order": email_engagement.get("email_click_without_order", False),
-            "email_clicked_without_order": email_engagement.get("email_clicked_without_order", False),
-            "email_followup_wait_days_remaining": email_engagement.get("email_followup_wait_days_remaining", 0),
-            "email_order_within_10_days": email_engagement.get("email_order_within_10_days", False),
-            # Compatibility for clients deployed before the broader proposal flow.
-            "reminder_email_due": email_proposal["due"] and email_type == "reminder",
-            "reminder_email_reason": email_proposal["reason"] if email_type == "reminder" else "",
-            "reminder_email_blockers": email_proposal["blockers"],
-            "reminder_email_recipient_count": email_proposal["eligible_recipient_count"],
-            "reminder_email_latest_sent_at": email_proposal["latest_sent_at"],
-        }
+            }
 
     if request.headers.get("X-PB-Value-Model") in {"v3.1", "v3.2", "v3.3", "v3.4", "v3.5"}:
         # Identity-safe read model for the new store list. Name-only legacy data
@@ -8123,7 +5821,7 @@ def build_customer_insights_response(spreadsheet, today, user, global_snapshot):
             "next_delivery_date", "next_delivery_dfp", "days_since_delivery",
             "latest_contact_date", "latest_contact_class",
             "latest_contact_result", "latest_follow_up_date",
-            "email_click_without_order", "email_clicked_without_order",
+
         )
         for customer in customers:
             cid = str(customer.get("customer_id") or "").strip()
@@ -13336,7 +11034,7 @@ def saved_route_request_conflicts(
 
 
 ROUTE_DECISION_SHEETS = ("customers_enriched", "users", "sales_activities", "order_rows",
-                         CUSTOMER_STATE_EVENTS_SHEET, "planning_suggestions", "email_messages", "email_recipients")
+                         CUSTOMER_STATE_EVENTS_SHEET, "planning_suggestions",  )
 
 
 def replaceable_route_activity(row):
@@ -13353,20 +11051,6 @@ def route_decision_source_version(spreadsheet, stops):
     names = {normalize_key(c.get("customer")) for c in customers if c.get("customer_id") in ids}
     numbers = {str(c.get("customer_number") or "") for c in customers if c.get("customer_id") in ids} - {""}
     result = {}
-    # Recipient events are tied to email message IDs, not customer IDs.
-    # Ignore unrelated customers while retaining changes to selected mailings.
-    selected_message_ids = set()
-    try:
-        messages = worksheet_to_dicts(get_worksheet(spreadsheet, "email_messages"))
-        selected_message_ids = {
-            str(row.get("email_id") or "").strip()
-            for row in messages
-            if str(row.get("customer_id") or "") in ids
-            or normalize_key(row.get("customer")) in names
-            or str(row.get("customer_number") or "") in numbers
-        } - {""}
-    except WorksheetNotFound:
-        pass
     for title in ROUTE_DECISION_SHEETS:
         try:
             sheet = get_worksheet(spreadsheet, title)
@@ -13374,10 +11058,7 @@ def route_decision_source_version(spreadsheet, stops):
             result[title] = None
             continue
         rows = worksheet_to_dicts(sheet)
-        if title == "email_recipients":
-            rows = [row for row in rows if str(row.get("email_id") or "").strip()
-                    in selected_message_ids]
-        elif title != "users":
+        if title != "users":
             rows = [r for r in rows if str(r.get("customer_id") or "") in ids
                     or normalize_key(r.get("customer") or r.get("Customer")) in names
                     or str(r.get("customer_number") or r.get("Customer number") or "") in numbers]
@@ -14818,12 +12499,6 @@ def load_sales_coaching_summary(spreadsheet, filters):
     planned_activities = optional_sales_coaching_rows(
         spreadsheet, PLANNED_ACTIVITIES_SHEET, PLANNED_ACTIVITY_COLUMNS
     )
-    message_rows = optional_sales_coaching_rows(
-        spreadsheet, EMAIL_MESSAGES_SHEET, EMAIL_MESSAGES_COLUMNS
-    )
-    recipient_rows = optional_sales_coaching_rows(
-        spreadsheet, EMAIL_RECIPIENTS_SHEET, EMAIL_RECIPIENTS_COLUMNS
-    )
     planning_suggestion_rows = optional_sales_coaching_rows(
         spreadsheet, "planning_suggestions", SUGGESTION_COLUMNS
     )
@@ -14835,12 +12510,12 @@ def load_sales_coaching_summary(spreadsheet, filters):
         read_started,
         len(activities),
     )
-    current_priorities, _email_snapshot = build_current_priority_snapshot(
+    current_priorities = build_current_priority_snapshot(
         customers=customers,
         order_rows=order_rows,
         contact_rows=activities,
-        message_rows=message_rows,
-        recipient_rows=recipient_rows,
+
+
         today=stockholm_today(),
         planned_activity_rows=planned_activities,
     )
@@ -14935,9 +12610,6 @@ def get_followup_insights():
 
     contact_rows = get_contact_rows(spreadsheet)
     order_rows = get_order_rows(spreadsheet)
-    message_rows, recipient_rows, _ = get_email_rows(
-        spreadsheet, include_events=False
-    )
     calculation_started = time.perf_counter()
     dfp_top_weeks_2026 = build_dfp_top_weeks(order_rows, year=2026, limit=5)
 
@@ -15066,13 +12738,6 @@ def get_followup_insights():
             for customer_key, customer in customers_by_name.items()
             if customer.get("sales_person") == selected_responsible
         }
-    email_performance = build_email_performance(
-        message_rows,
-        recipient_rows,
-        order_rows,
-        included_customer_keys=included_customer_keys,
-        today=today,
-    )
 
     payload = {
         "generated_at": stockholm_now().isoformat(timespec="minutes"),
@@ -15096,8 +12761,7 @@ def get_followup_insights():
                 for w in weeks
             ],
         },
-        "email_performance": email_performance,
-    }
+        }
     record_performance_step(
         "calculation.followup_insights",
         calculation_started,
@@ -16148,5 +13812,4 @@ app.register_blueprint(create_meta_instagram_blueprint(
 
 
 if __name__ == "__main__":
-    start_brevo_background_workers()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT") or 5000), debug=False)

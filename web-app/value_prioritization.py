@@ -328,8 +328,6 @@ def contact_opportunity(*, business_value_raw: float,
             relevance = max(relevance, 0.75)
         if trigger in {"overdue_explicit_follow_up", "follow_up_due_today", "overdue_planned_activity", "internal_followup_due", "self_ordering_followup_due"}:
             relevance = max(relevance, 0.75)
-        if trigger in {"stockfiller_click_followup", "product_sheet_click_followup"}:
-            relevance = max(relevance, 0.75)
         if trigger in {"unanswered_retry_due", "unanswered_verify_contact_due"} and (age is None or age >= 30):
             relevance = max(relevance, 0.75)
     if negative_dialogue_signal and not (decision or {}).get("explicit_agreement_overrides_negative"):
@@ -420,7 +418,7 @@ def store_contact_guidance(
     positive_prospect_signal: bool = False,
     positive_buyer_signal: bool = False,
     pending_unconfirmed_order_date: date | None = None,
-    qualified_email_trigger: str = "", qualified_email_reason: str = "", policy: dict = POLICY,
+    policy: dict = POLICY,
     latest_attempt_at=None, latest_reached_at=None, follow_up_created_at=None,
     latest_reached_event_order=None, follow_up_event_order=None,
     source_contact_id="", reported_order_date=None, latest_verified_delivery_date=None,
@@ -671,8 +669,6 @@ def store_contact_guidance(
         return choose("wait", "Invänta kundens beställning" if self_ordering_signal else "Avvakta till uppföljningsdatum",
                       "Kunden avser beställa själv; senare uppföljning finns" if self_ordering_signal else "Ett senare internt uppföljningsdatum finns; ingen kalenderbokning",
                       code="self_ordering_wait" if self_ordering_signal else "internal_followup_wait", until=future_reminders[0])
-    if guidance.get("reason_code") == "recent_email_engagement_wait":
-        return choose("wait", "Invänta mejlutfall", "Kvalificerad mejlsignal inväntar uppföljningsfönstret", code="recent_email_engagement_wait")
 
     reached_by_purpose = reached_by_purpose or {}
     current_purpose = "first_order_onboarding" if delivery_count == 1 and days_since_delivery is not None and 7 <= days_since_delivery <= 10 else "second_purchase_due"
@@ -692,9 +688,6 @@ def store_contact_guidance(
         gap_contact = max((d for d in (purpose_contact, recent_after_delivery) if d), default=None)
         if gap_contact and 0 <= (today - gap_contact).days < int(policy["same_purpose_dialogue_gap_days"]):
             return choose("wait", "Avvakta kort kontaktpaus", "Nylig dialog efter första leveransen", code="recent_same_purpose_dialogue_wait", until=gap_contact + timedelta(days=int(policy["same_purpose_dialogue_gap_days"])))
-    if qualified_email_trigger in {"stockfiller_click_followup", "product_sheet_click_followup"}:
-        action = "Följ upp beställningsintresset" if qualified_email_trigger == "stockfiller_click_followup" else "Följ upp produktintresset"
-        return choose("act_now", action, qualified_email_reason or "Aktuell kvalificerad mejlsignal utan senare order", code=qualified_email_trigger, key="follow_up_order_interest")
     due_reminders = [item for item in internal_reminders
                      if (due := _decision_day(item.get("due_date"))) is not None
                      and 0 <= (today - due).days < int(policy["stale_followup_review_days"])]

@@ -61,15 +61,14 @@ class RouteContactPolicyTests(TestCase):
         sheet.values = sheet.values[:1] + [[plan.get(key, "") for key in app_module.PLANNED_ACTIVITY_COLUMNS]
                                           for plan in plans]
         customers = app_module.get_customer_rows(self.spreadsheet)
-        priorities, engagement = app_module.build_current_priority_snapshot(
+        priorities = app_module.build_current_priority_snapshot(
             customers=customers, users=app_module.get_user_rows(self.spreadsheet),
-            order_rows=list(orders), contact_rows=list(contacts), message_rows=[], recipient_rows=[],
+            order_rows=list(orders), contact_rows=list(contacts),
             planned_activity_rows=list(plans), today=NOW.date(), as_of=NOW,
         )
         return {"customers": customers, "priorities": priorities, "order_rows": list(orders),
                 "contact_rows": list(contacts), "planned_activity_rows": list(plans),
-                "customer_state_events": [], "message_rows": [], "recipient_rows": [],
-                "email_engagement": engagement, "snapshot_created_at": NOW.isoformat()}
+                "customer_state_events": [], "snapshot_created_at": NOW.isoformat()}
 
     def priority(self, snapshot):
         return next(row for row in snapshot["priorities"] if row["customer_id"] == CID)
@@ -96,7 +95,6 @@ class RouteContactPolicyTests(TestCase):
         self.assertEqual(after["list_guidance"],before["list_guidance"])
         self.assertEqual(after["business_value_raw"],before["business_value_raw"])
         self.assertEqual(after["obligation_ids"],[])
-        self.assertEqual(app_module.email_contact_decision(after),app_module.email_contact_decision(before))
         for legacy in (False,True):
             result,error=self.route(current,legacy=legacy)
             self.assertIsNone(error,error)

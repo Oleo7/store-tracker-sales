@@ -130,7 +130,7 @@ class PlanningSuggestionV2IntegrationTests(PlanningApiTestCase):
                 with patch.object(
                     app_module,
                     "build_current_priority_snapshot",
-                    return_value=([], {}),
+                    return_value=[],
                 ) as build_snapshot:
                     app_module.planning_suggestion_candidates(
                         self.spreadsheet,
@@ -203,12 +203,12 @@ class PlanningSuggestionV2IntegrationTests(PlanningApiTestCase):
         self.assertNotEqual(
             (payload.get("suggestion") or {}).get("customer"), "Butik A"
         )
-        priorities, _ = app_module.build_current_priority_snapshot(
+        priorities = app_module.build_current_priority_snapshot(
             customers=app_module.get_customer_rows(self.spreadsheet),
             order_rows=app_module.get_order_rows(self.spreadsheet),
             contact_rows=app_module.get_contact_rows(self.spreadsheet),
-            message_rows=[],
-            recipient_rows=[],
+
+
             today=app_module.stockholm_today(),
             planned_activity_rows=[row for row in self.planning_rows()],
         )

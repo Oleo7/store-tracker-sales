@@ -1044,8 +1044,8 @@ def _history_rename_targets(
     targets = []
     for sheet_name in (
         "sales_activities",
-        "email_messages",
-        "email_recipients",
+
+
         "planned_activities",
     ):
         try:

@@ -160,9 +160,9 @@ class CoordinatedRouteSaveTests(PlanningApiTestCase):
         # V3.5 population would yield different priors and value index.
         isolated_orders = [row for row in a.get_order_rows(self.spreadsheet)
                            if row.get("customer_id") == selected_id]
-        isolated, _ = a.build_current_priority_snapshot(
+        isolated = a.build_current_priority_snapshot(
             customers=customers[:1], order_rows=isolated_orders,
-            contact_rows=[], message_rows=[], recipient_rows=[],
+            contact_rows=[],
             planned_activity_rows=[], state_events=[], today=fixture.NOW.date(),
             as_of=fixture.NOW, users=a.get_user_rows(self.spreadsheet))
         self.assertEqual(len(isolated), 1)
@@ -182,7 +182,7 @@ class CoordinatedRouteSaveTests(PlanningApiTestCase):
         self.assertTrue(all(count == len(a.get_customer_rows(self.spreadsheet))
                             for count in sizes))
 
-    def test_recipient_change_for_unrelated_customer_does_not_expire_route(self):
+    def test_retired_tracking_tables_never_change_route_sources(self):
         rows = [{"customer_id": "11111111-1111-4111-8111-111111111111"}]
         messages = fixture.FakeWorksheet(
             "email_messages", ["email_id", "customer_id", "customer"],
@@ -198,7 +198,7 @@ class CoordinatedRouteSaveTests(PlanningApiTestCase):
         recipients.update_cell(3, 2, "opened")
         self.assertEqual(a.route_decision_source_version(self.spreadsheet, rows), before)
         recipients.update_cell(2, 2, "bounced")
-        self.assertNotEqual(a.route_decision_source_version(self.spreadsheet, rows), before)
+        self.assertEqual(a.route_decision_source_version(self.spreadsheet, rows), before)
 
     def test_two_concurrent_saves_create_one_route(self):
         token = self.preview()

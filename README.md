@@ -111,3 +111,9 @@ python enrich_stores.py
 ### Inspect customer enrichment data in the notebook
 
 Open `enrich_stores.ipynb` in Jupyter or VS Code and run the cells in order. The notebook is intentionally read-only and only inspects `customers_enriched`; production writes should be performed by `enrich_stores.py`. It requires the same `.env` file in the project root.
+
+## Store Tracker Sales: no automatic email integration
+
+Automatic email proposals, Brevo and engagement tracking have been removed.
+Manual email contacts, addresses and mailto links remain. See
+[removal scope and database migration](docs/email-integration-removal.md).

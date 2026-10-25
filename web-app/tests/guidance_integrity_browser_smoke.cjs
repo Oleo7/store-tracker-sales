@@ -46,7 +46,7 @@ print(json.dumps([dict(name=k,item=scored(**v)) for k,v in cases.items()]))
           Object.assign(ins,item);
           customers=[c];
           Object.values(filterState).forEach(set=>set.clear());
-          searchQuery=''; emailClickNoOrderActive=false;
+          searchQuery='';
           renderList();
           const card=document.querySelector('.customer-card');
           const guidance=item.customer_guidance;

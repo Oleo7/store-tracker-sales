@@ -10,15 +10,8 @@ PHONE_TRIGGERS = {
     "positive_buyer_followup",
     "unanswered_retry_due",
     "unanswered_verify_contact_due",
-    "stockfiller_click_followup",
-    "product_sheet_click_followup",
-    "email_open_followup",
-}
 
-EMAIL_INTENT_TRIGGERS = {
-    "stockfiller_click_followup",
-    "product_sheet_click_followup",
-    "email_open_followup",
+
 }
 
 
@@ -49,10 +42,7 @@ def recommend_contact_channel(
     segment = str(segment or "").strip().upper()[:1]
     phone_tel = normalized_phone(phone)
 
-    if trigger_key in EMAIL_INTENT_TRIGGERS:
-        base = "phone"
-        reason = f"{trigger_key}_phone"
-    elif trigger_key == "positive_dialogue_followup" and segment == "A":
+    if trigger_key == "positive_dialogue_followup" and segment == "A":
         base = "visit"
         reason = "positive_dialogue_segment_a_visit"
     elif lifecycle in {"reactivation", "established"}:

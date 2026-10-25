@@ -64,3 +64,15 @@ jobs:
           exit 1
       - name: Route save and grouped attention browser regressions
         run: node web-app/tests/route_attention_browser_smoke.cjs
+      - name: Removed email integration browser regressions
+        run: node web-app/tests/email_removal_browser_smoke.cjs
+      - name: Preserve browser verification evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: email-removal-browser-verification
+          path: |
+            artifacts/email-removal
+            sales-coaching-harness.log
+            route-attention-harness.log
+          retention-days: 7

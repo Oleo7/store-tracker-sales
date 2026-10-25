@@ -78,7 +78,6 @@ class OnlyCurrentModelTests(TestCase):
             broken={**valid,'priority_score':100,'priority_score_at_creation':100,**change}
             with self.subTest(change=change):
                 self.assertIsNone(application.route_priority_values(broken))
-                self.assertFalse(application.email_contact_decision(broken).get('allowed'))
 
     def test_old_suggestion_never_reuses_stored_ranking_or_action(self):
         old={'priority_score_at_creation':100,'score_version':'v2.2','reason_text_at_creation':'Old call',

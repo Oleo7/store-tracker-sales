@@ -13,7 +13,7 @@ from customer_obligations import build_customer_state, attention_items
 from priority import build_order_features, build_priority_customers
 from sales_coaching import group_logical_orders
 from test_priority_v2 import customer, order, contact, priorities
-from test_priority_v4 import scored, email_rows, customer as email_customer
+from test_priority_v4 import scored, customer as email_customer
 from test_planning import default_spreadsheet
 
 
@@ -95,20 +95,6 @@ class CommercialV22Tests(TestCase):
             if age > 45:
                 self.assertNotIn("Positiv dialog", item["next_action"].get("reason", ""))
 
-    def test_click_window_open_only_and_later_handling(self):
-        for kind in ("stockfiller", "product", "open"):
-            messages, recipients = email_rows(kind=kind)
-            for age in (2, 3, 14, 15):
-                today = date(2026, 8, 2) + timedelta(days=age)
-                feature = app_module.build_email_engagement_snapshot(messages, recipients, [], today=today, customers=[email_customer()])["id:cid-1"]
-                result = scored(today=today, email_feature=feature)[0]
-                active = kind != "open" and 3 <= age <= 14
-                self.assertEqual(bool(result["email_intent_trigger"]), active)
-                self.assertEqual(result["intent_timing"], round(100 * (result)["work_contact_factor"]))
-                later_contact = {"customer_id": "cid-1", "customer": "Butik", "date_time": "2026-08-03 10:00", "result": "Neutral"}
-                self.assertFalse(scored(today=today, email_feature=feature, contacts=[later_contact])[0]["email_intent_trigger"])
-                later_order = {**order("later", "Butik", "2026-08-03", 2, "100"), "customer_id": "cid-1"}
-                self.assertFalse(scored(today=today, email_feature=feature, orders=[later_order])[0]["email_intent_trigger"])
 
     def test_calibration_calendar_boundaries_and_no_event_double_count(self):
         stores = [customer("Store", "s")]

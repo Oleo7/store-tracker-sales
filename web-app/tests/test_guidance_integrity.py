@@ -35,25 +35,18 @@ def contact(age=7, result='Neutral', follow_up='', contact_id='contact'):
                 follow_up_agreement_confirmed="Y" if follow_up else "N")
 
 
-def email(kind='stockfiller', age=7):
-    return {'customer_id': 'c', 'email_followup_status': kind + '_clicked_no_order',
-            'email_followup_email_id': 'email', 'email_followup_wait_days_remaining': max(0, 3-age),
-            'email_followup_proposal_label': 'P\u00e5minnelse',
-            f'email_{kind}_first_clicked_at': (NOW - timedelta(days=age)).isoformat()}
-
-
 def activity(days=1):
     return dict(planned_activity_id='activity', customer_id='c', sales_person='Olle',
                 contact_type='phone', status='planned',
                 scheduled_at=(NOW + timedelta(days=days)).isoformat())
 
 
-def scored(*, store=None, orders=(), contacts=(), mail=None, planned=(), today=TODAY,
+def scored(*, store=None, orders=(), contacts=(), planned=(), today=TODAY,
            suppressions=None, features=None):
     features = features if features is not None else p.build_order_features(list(orders))
     return p.build_priority_customers(
         [store or customer()], features, p.build_contact_features(list(contacts), features),
-        None, today, email_features={'id:c': mail} if mail else {},
+        None, today,
         planned_activities=list(planned), now=datetime.combine(today, NOW.time()),
         workflow_suppressions=suppressions,
     )[0]
@@ -99,24 +92,6 @@ class GuidanceIntegrityTests(TestCase):
         self.assertEqual(p._guidance_date(date(2025,12,31), TODAY), '31 dec 2025')
         self.assertEqual(p._guidance_date(date(2027,1,1), TODAY), '1 jan 2027')
 
-    def test_click_matrix_preserves_actual_signal_across_customer_focuses(self):
-        cases = [([], 'B', 'warm_opportunity'), ([], 'A', 'a_prospect'),
-                 ([order('one',30)], 'C', 'second_purchase'),
-                 ([order('one',30),order('two',50)], 'C', 'repeat_purchase'),
-                 ([order('one',200)], 'C', 'reactivation'),
-                 ([order('one',200),order('two',220)], 'C', 'reactivation')]
-        for kind in ('stockfiller','product_sheet'):
-            for rows, segment, focus in cases:
-                with self.subTest(kind=kind,focus=focus,count=len(rows)):
-                    item = scored(store=customer(segment),orders=rows,mail=email(kind))
-                    g = self.assert_canonical(item)
-                    self.assertEqual(g['focus_key'],focus)
-                    self.assertIn('Stockfiller-klick' if kind=='stockfiller' else 'Produktbladsklick',g['reason_text'])
-                    self.assertIn('ingen senare order',g['reason_text'])
-                    self.assertEqual(item['primary_trigger_type'],kind+'_click_followup')
-                    self.assertEqual(g['action_label'],'Följ upp beställningsintresset' if kind=='stockfiller' else 'Följ upp produktintresset')
-                    self.assertEqual(item['next_action']['action_type'], kind+'_click_followup')
-                    self.assertEqual(item['next_action']['contact_type'], 'phone')
 
     def test_dialogue_matrix_uses_buyer_window_and_preserves_first_order_phase(self):
         for rows, segment, focus in [([], 'B','warm_opportunity'),([], 'A','a_prospect'),
@@ -136,18 +111,13 @@ class GuidanceIntegrityTests(TestCase):
         self.assertEqual(self.assert_canonical(reorder)['reason_code'],'positive_buyer_followup_wait')
 
     def test_a_prospect_explanation_never_changes_context_identity(self):
-        baseline=scored(store=customer('A'))
-        for kwargs in ({'contacts':[contact(10,'Positiv')]},{'mail':email()},
-                       {'contacts':[contact(10,'Positiv')],'mail':email()}):
-            item=scored(store=customer('A'),**kwargs)
-            self.assertEqual(item['customer_guidance']['focus_key'], 'a_prospect')
-            self.assertEqual(item['primary_trigger_type'], 'stockfiller_click_followup' if kwargs.get('mail') else 'positive_dialogue_followup')
-            self.assertEqual(app_module.priority_decision_context_hash(item,'olle'),
-                             app_module.priority_decision_context_hash(baseline,'olle'))
-            self.assert_canonical(item)
-        both=scored(store=customer('A'),contacts=[contact(10,'Positiv')],mail=email())
-        self.assertIn('Stockfiller-klick',both['primary_reason_text'])
-        self.assertNotIn('Positiv dialog',both['primary_reason_text'])
+        baseline = scored(store=customer('A'))
+        item = scored(store=customer('A'), contacts=[contact(10, 'Positiv')])
+        self.assertEqual(item['customer_guidance']['focus_key'], 'a_prospect')
+        self.assertEqual(item['primary_trigger_type'], 'positive_dialogue_followup')
+        self.assertEqual(app_module.priority_decision_context_hash(item, 'olle'),
+                         app_module.priority_decision_context_hash(baseline, 'olle'))
+        self.assert_canonical(item)
 
     def test_reactivation_distinguishes_one_delivery_from_repeat_history(self):
         for count in (1,2):
@@ -185,17 +155,16 @@ class GuidanceIntegrityTests(TestCase):
     def test_real_plans_overdue_and_suppressions_stay_authoritative(self):
         for planned,status in [([activity(1)],'planned'),([activity(-1)],'overdue_followup'),
                                ([activity(-1),activity(1)],'planned')]:
-            g=scored(store=customer('A'),mail=email(),planned=planned)['customer_guidance']
+            g=scored(store=customer('A'),planned=planned)['customer_guidance']
             self.assertEqual(g['status_key'],status)
             self.assertIn('Telefon',g['reason_text'])
         for days,status in [(1,'wait'),(-1,'overdue_followup')]:
-            g=scored(store=customer('A'),mail=email(),contacts=[contact(10,'Neutral',
+            g=scored(store=customer('A'),contacts=[contact(10,'Neutral',
                      (TODAY+timedelta(days=days)).isoformat())])['customer_guidance']
             self.assertEqual(g['status_key'],status)
         for kwargs,reason in [({'orders':[order('future',-4)]},'future_delivery'),
                              ({'contacts':[contact(1)]},'recent_reached_routine_wait'),
                              ({'contacts':[contact(3,'Negativ')]},'negative_contact_cooldown'),
-                             ({'mail':email(age=2)},'recent_email_engagement_wait'),
                              ({'contacts':[contact(3,'Negativ')]},'negative_contact_cooldown')]:
             item=scored(store=customer('A'),**kwargs)
             self.assertEqual(item['customer_guidance']['status_key'],'wait')
@@ -203,15 +172,9 @@ class GuidanceIntegrityTests(TestCase):
             self.assertNotIn('Uttrycklig',item['customer_guidance']['reason_text'])
 
     def test_inactive_or_handled_signals_are_not_described_as_live(self):
-        for kwargs in ({'mail':email(age=15)},
-                       {'mail':email(),'contacts':[contact(4)]},
-                       {'contacts':[contact(46,'Positiv')]}):
-            item=scored(store=customer('A'),**kwargs)
-            self.assertNotIn('Stockfiller', item['primary_reason_text'])
-            self.assertNotIn('Positiv dialog', item['primary_reason_text'])
-            self.assertEqual(item['customer_guidance']['focus_key'], 'a_prospect')
-        later=scored(store=customer('A'),mail=email(),orders=[order('later',4)])
-        self.assertNotIn('Stockfiller',later['customer_guidance']['reason_text'])
+        item = scored(store=customer('A'), contacts=[contact(46, 'Positiv')])
+        self.assertNotIn('Positiv dialog', item['primary_reason_text'])
+        self.assertEqual(item['customer_guidance']['focus_key'], 'a_prospect')
 
     def test_unknown_legacy_trigger_cannot_fabricate_a_current_signal_or_followup(self):
         snapshot={'primary_trigger_type':'new_signal','primary_trigger_key':'new_signal',

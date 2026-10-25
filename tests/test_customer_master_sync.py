@@ -531,7 +531,7 @@ class GlnIdentityTests(TestCase):
                                        REVIEW_SHEET_NAME: FakeWorksheet(REVIEW_SHEET_NAME, [["old"], ["resolved"]])})
         review = spreadsheet.worksheet(REVIEW_SHEET_NAME)
         review.col_count = len(REVIEW_COLUMNS) - 2
-        for title in ("sales_activities", "email_messages", "email_recipients"):
+        for title in ("sales_activities",  ):
             spreadsheet.sheets[title] = FakeWorksheet(title, [["customer"]])
         rows = [masthugget_order()] * 3
         before = deepcopy(sheet.values)
@@ -558,7 +558,7 @@ class GlnIdentityTests(TestCase):
         sheet = FakeWorksheet("customers_enriched", [CUSTOMER_HEADERS])
         review = FakeWorksheet(REVIEW_SHEET_NAME, [["status"]])
         spreadsheet = FakeSpreadsheet({"customers_enriched": sheet, REVIEW_SHEET_NAME: review})
-        for title in ("sales_activities", "email_messages", "email_recipients"):
+        for title in ("sales_activities",  ):
             spreadsheet.sheets[title] = FakeWorksheet(title, [["customer"]])
         with patch.object(review, "clear", side_effect=RuntimeError("review write failed")):
             with self.assertRaisesRegex(RuntimeError, "review write failed"):
@@ -573,7 +573,7 @@ class GlnIdentityTests(TestCase):
         headers = CUSTOMER_HEADERS + ["lat", "lng", "manual_note"]
         sheet = FakeWorksheet("customers_enriched", [headers])
         spreadsheet = FakeSpreadsheet({"customers_enriched": sheet})
-        for title in ("sales_activities", "email_messages", "email_recipients"):
+        for title in ("sales_activities",  ):
             spreadsheet.sheets[title] = FakeWorksheet(title, [["customer"]])
         run_customer_sync(spreadsheet, mode="apply", order_rows=[masthugget_order()])
         row = dict(zip(sheet.values[0], sheet.values[1]))
@@ -596,14 +596,14 @@ class GlnIdentityTests(TestCase):
             "planned_activities": FakeWorksheet("planned_activities", [planning_headers,
                 ["plan-1", MASTHUGGET_ID, existing["customer"], "1234", "1234", "call first", "Sofia"]]),
         }
-        for title in ("sales_activities", "email_messages", "email_recipients"):
+        for title in ("sales_activities",  ):
             sheets[title] = FakeWorksheet(title, [["customer", "customer_id", "note", "sales_person"],
                                                 [existing["customer"], MASTHUGGET_ID, "keep", "Sofia"]])
         spreadsheet = FakeSpreadsheet(sheets)
         row = masthugget_order(Customer="Coop Masthugget City")
         result = run_customer_sync(spreadsheet, mode="apply", order_rows=[row])
         self.assertEqual(result.updated_names, 1)
-        for title in ("sales_activities", "email_messages", "email_recipients"):
+        for title in ("sales_activities",  ):
             self.assertEqual(sheets[title].values[1], ["Coop Masthugget City", MASTHUGGET_ID, "keep", "Sofia"])
         self.assertEqual(sheets["planned_activities"].values[1],
                          ["plan-1", MASTHUGGET_ID, "Coop Masthugget City", "1234", "1234", "call first", "Sofia"])
@@ -671,21 +671,7 @@ class CustomerMasterApplyTests(TestCase):
                         ["2026-01-02", "Old Store", "keep"],
                     ],
                 ),
-                "email_messages": FakeWorksheet(
-                    "email_messages",
-                    [
-                        ["email_id", "customer", "customer_number"],
-                        ["mail-1", "Old Store", "1001"],
-                    ],
-                ),
-                "email_recipients": FakeWorksheet(
-                    "email_recipients",
-                    [
-                        ["email_id", "customer", "actual_email"],
-                        ["mail-1", "Old Store", "old@example.com"],
-                    ],
-                ),
-            }
+                }
         )
 
     def test_apply_renames_history_then_customer_and_appends_once(self):
@@ -714,14 +700,6 @@ class CustomerMasterApplyTests(TestCase):
         self.assertEqual(result.ignored_gln_identifiers, 1)
         self.assertEqual(
             self.spreadsheet.worksheet("sales_activities").values[1][1],
-            "New Store",
-        )
-        self.assertEqual(
-            self.spreadsheet.worksheet("email_messages").values[1][1],
-            "New Store",
-        )
-        self.assertEqual(
-            self.spreadsheet.worksheet("email_recipients").values[1][1],
             "New Store",
         )
         self.assertEqual(

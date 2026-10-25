@@ -29,40 +29,26 @@ class AdminAccessTests(TestCase):
         self.assertFalse(app_module.public_user({"admin": "N"})["admin"])
         self.assertFalse(app_module.public_user({})["admin"])
 
-    def test_non_admin_cannot_read_or_update_settings(self):
+    def test_removed_email_settings_are_unavailable_to_non_admin(self):
         self.login(admin=False)
+        self.assertEqual(self.client.get('/email-proposal-settings').status_code, 404)
+        self.assertEqual(self.client.put('/email-proposal-settings/reminder', json={}).status_code, 404)
 
-        get_response = self.client.get("/email-proposal-settings")
-        put_response = self.client.put(
-            "/email-proposal-settings/reminder",
-            json={},
-        )
-
-        self.assertEqual(get_response.status_code, 403)
-        self.assertEqual(get_response.get_json()["error"], "admin_required")
-        self.assertEqual(put_response.status_code, 403)
-        self.assertEqual(put_response.get_json()["error"], "admin_required")
-
-    def test_admin_can_read_settings(self):
+    def test_removed_email_settings_are_unavailable_to_admin(self):
         self.login(admin=True)
-        with (
-            patch.object(app_module, "get_spreadsheet_with_retry", return_value=object()),
-            patch.object(app_module, "get_settings", return_value={}),
-        ):
-            response = self.client.get("/email-proposal-settings")
+        with patch.object(app_module, 'get_spreadsheet_with_retry') as load:
+            self.assertEqual(self.client.get('/email-proposal-settings').status_code, 404)
+        load.assert_not_called()
 
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.get_json()["ok"])
-
-    def test_logout_is_in_insights_and_settings_is_admin_controlled(self):
+    def test_logout_is_in_insights_without_retired_email_settings(self):
         html = (WEB_APP_DIR / "index.html").read_text(encoding="utf-8")
         insights_start = html.index('<div class="view" id="view-insights">')
         insights_end = html.index("<!-- ═══════════════ CONTACT LOG VIEW", insights_start)
         insights_html = html[insights_start:insights_end]
 
         self.assertIn('id="logout-btn"', insights_html)
-        self.assertIn("Boolean(currentUser) && userIsAdmin()", html)
-        self.assertIn("if (!userIsAdmin()) return;", html)
+        self.assertNotIn('id="settings-btn"', html)
+        self.assertNotIn('id="view-settings"', html)
 
 
 if __name__ == "__main__":

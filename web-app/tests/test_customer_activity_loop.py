@@ -558,8 +558,8 @@ class ActivityLoopSafetyTests(PlanningApiTestCase):
         future=NOW+timedelta(days=7)
         model=app_module.customer_state_snapshot(self.spreadsheet,now=future)
         self.assertEqual(attention_items(model,as_of=future),[]);self.assertEqual(model['latest_reached'],{})
-        priorities,_=app_module.build_current_priority_snapshot(customers=app_module.get_customer_rows(self.spreadsheet),
-            contact_rows=self.contact_rows(),planned_activity_rows=self.planning_rows(),order_rows=[],message_rows=[],recipient_rows=[],
+        priorities=app_module.build_current_priority_snapshot(customers=app_module.get_customer_rows(self.spreadsheet),
+            contact_rows=self.contact_rows(),planned_activity_rows=self.planning_rows(),order_rows=[],
             today=future.date(),as_of=future,users=app_module.get_user_rows(self.spreadsheet),prepared_state=model)
         self.assertGreater(next(r for r in priorities if r['customer_id']==CID)['contact_priority_raw'],0)
 

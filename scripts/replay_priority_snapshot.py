@@ -140,7 +140,6 @@ def main():
 
         application.app.config.update(TESTING=True, SECRET_KEY="local-crm-review-only")
         application.app.logger.setLevel(logging.ERROR)
-        application._email_sheets_cache = None
         application.invalidate_priority_snapshot()
         with ExitStack() as stack:
             stack.enter_context(patch.object(application, "get_spreadsheet_with_retry", return_value=spreadsheet))
@@ -287,8 +286,6 @@ def main():
                     "active_priorities": len(priorities),
                     "order_rows": len(global_snapshot["order_rows"]),
                     "contact_rows": len(global_snapshot["contact_rows"]),
-                    "message_rows": len(global_snapshot["message_rows"]),
-                    "recipient_rows": len(global_snapshot["recipient_rows"]),
                     "planned_activity_rows": len(global_snapshot["planned_activity_rows"]),
                     "workflow_suppressions": dict(Counter(workflow.values())),
                     "list_status": dict(Counter(p.get("list_guidance", {}).get("status_key", "") for p in priorities)),
