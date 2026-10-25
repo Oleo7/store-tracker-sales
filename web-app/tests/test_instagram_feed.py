@@ -161,7 +161,6 @@ class InstagramTests(TestCase):
             self.assertEqual(response.status_code, 403)
             self.assertNotIn('Access-Control-Allow-Origin', response.headers)
         self.assertEqual(client.get('/customers').status_code, 401)
-        self.assertEqual(client.get('/email-proposal-settings').status_code, 401)
         self.assertEqual(client.post('/api/public/instagram-feed').status_code, 401)
 
 

@@ -224,13 +224,6 @@ class Ownership1BTests(TestCase):
             edit = self.client.patch(
                 "/customers/3/contact", json={"phone": "000"}
             )
-            draft = self.client.get(
-                "/customers/3/email-proposal-draft"
-            )
-            send = self.client.post(
-                "/customers/3/email-proposal/send",
-                json={"draft_id": "unauthorized-send"},
-            )
             contact = self.client.post(
                 "/customers/Other%20Store/contacts",
                 json={
@@ -245,11 +238,9 @@ class Ownership1BTests(TestCase):
             [
                 stats.status_code,
                 edit.status_code,
-                draft.status_code,
-                send.status_code,
                 contact.status_code,
             ],
-            [404, 404, 404, 404, 404],
+            [404, 404, 404],
         )
         get_orders.assert_not_called()
 

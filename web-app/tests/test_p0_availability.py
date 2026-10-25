@@ -884,7 +884,7 @@ class ConcurrentEndpointAvailabilityTests(PlanningApiTestCase):
 
 
 class LegacyEmailIdentityTests(TestCase):
-    def test_ornaset_unlinked_email_preserves_promise_and_commercial_reorder_value(self):
+    def test_historical_automated_email_cannot_resolve_customer_promise_or_alter_value(self):
         customer_id = "f43f7cee-1e62-4b70-9735-0000000002e8"
         customers = [{
             "row": 2, "customer_id": customer_id,
@@ -918,9 +918,8 @@ class LegacyEmailIdentityTests(TestCase):
         order_features = build_order_features(orders)
         contact_features = build_contact_features(contacts, order_features)
         feature = next(iter(contact_features.values()))
-        # This old compatibility flag is customer-wide. The canonical model
-        # must preserve the separately sourced commitment despite that flag.
-        self.assertTrue(feature["follow_up_resolved"])
+        # An automatic historical dispatch cannot resolve a human promise.
+        self.assertFalse(feature["follow_up_resolved"])
         item = build_priority_customers(
             customers, order_features, contact_features, "Olle",
             date(2026, 8, 8), limit=1,

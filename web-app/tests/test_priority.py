@@ -72,7 +72,7 @@ class PriorityTests(TestCase):
             with self.subTest(value=value):
                 self.assertEqual(normalize_contact_result(value), expected)
 
-    def test_email_after_followup_date_resolves_plan_and_preserves_human_signals(self):
+    def test_historical_automated_email_does_not_resolve_human_followup(self):
         contact_features = build_contact_features(
             [
                 {
@@ -110,14 +110,14 @@ class PriorityTests(TestCase):
             TODAY,
         )[0]
 
-        self.assertEqual(feature["latest_contact_date"], date(2026, 5, 4))
-        self.assertEqual(feature["latest_contact_channel"], "Mejl")
+        self.assertEqual(feature["latest_contact_date"], date(2026, 5, 1))
+        self.assertEqual(feature["latest_contact_channel"], "Besök")
         self.assertEqual(feature["latest_contact_class"], "Positiv")
         self.assertEqual(feature["latest_contact_comment"], "Bra dialog")
         self.assertEqual(feature["latest_freezer_fields"], ("Franui",))
         self.assertEqual(priority["latest_follow_up_date"], "2026-05-03")
-        self.assertFalse(priority["follow_up_due"])
-        self.assertFalse(priority["missad_uppfoljning"])
+        self.assertTrue(priority["follow_up_due"])
+        self.assertTrue(priority["missad_uppfoljning"])
 
     def test_email_before_followup_date_does_not_resolve_plan(self):
         contact_features = build_contact_features(
@@ -152,7 +152,7 @@ class PriorityTests(TestCase):
             TODAY,
         )[0]
 
-        self.assertEqual(priority["latest_contact_date"], "2026-05-02")
+        self.assertEqual(priority["latest_contact_date"], "2026-05-01")
         self.assertEqual(priority["latest_follow_up_date"], "2026-05-03")
         self.assertTrue(priority["follow_up_due"])
         self.assertTrue(priority["missad_uppfoljning"])
@@ -188,7 +188,7 @@ class PriorityTests(TestCase):
             TODAY,
         )[0]
 
-        self.assertEqual(priority["latest_contact_date"], "2026-05-05")
+        self.assertEqual(priority["latest_contact_date"], "2026-01-01")
         self.assertEqual(priority["latest_contact_class"], "Negativ")
         self.assertIn("Negativ kontakt för 125 dagar sedan", priority["reasons"])
 

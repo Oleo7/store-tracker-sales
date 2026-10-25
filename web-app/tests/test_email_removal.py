@@ -129,6 +129,68 @@ class RemovedEmailIntegrationTests(PlanningApiTestCase):
         self.assertEqual(self.contact_rows()[0]['planned_activity_id'], planned['planned_activity_id'])
         self.assertTrue(RETIRED.isdisjoint(self.accesses))
 
+
+    def test_legacy_automated_send_does_not_change_live_contact_features(self):
+        customers = application.get_customer_rows(self.spreadsheet)
+        human = {
+            'customer': 'Butik A', 'customer_id': CID,
+            'date_time': (NOW - timedelta(days=12)).isoformat(),
+            'contact_channel': 'Telefon', 'result': 'Neutral',
+            'contact_id': 'human', 'follow_up_date': (NOW - timedelta(days=5)).date().isoformat(),
+        }
+        auto = {
+            'customer': 'Butik A', 'customer_id': CID,
+            'date_time': (NOW - timedelta(days=1)).isoformat(),
+            'contact_channel': 'Mejl', 'result': 'Positiv',
+            'contact_id': 'retired-system-send', 'email_id': 'legacy-mail',
+            'activity_source': 'crm_email',
+            'follow_up_date': (NOW + timedelta(days=15)).date().isoformat(),
+        }
+        orders = priority.build_order_features([], customers=customers, as_of=NOW)
+        baseline = priority.build_contact_features([human], orders, customers=customers, as_of=NOW)
+        with_auto = priority.build_contact_features([human, auto], orders, customers=customers, as_of=NOW)
+        self.assertEqual(dict(with_auto), dict(baseline))
+        self.assertEqual(len(with_auto.source_rows), 2, 'Raw audit history remains available')
+        self.assertEqual(
+            application.build_customer_timeline('Butik A', [], [human, auto]),
+            application.build_customer_timeline('Butik A', [], [human]),
+        )
+
+    def test_automated_dispatch_cannot_create_virtual_followup(self):
+        from customer_obligations import build_customer_state
+        customers = application.get_customer_rows(self.spreadsheet)
+        auto = {
+            'customer': 'Butik A', 'customer_id': CID,
+            'date_time': (NOW - timedelta(days=10)).isoformat(),
+            'contact_channel': 'Mejl', 'result': 'Positiv',
+            'email_id': 'retired-system-send', 'activity_source': 'crm_email',
+            'follow_up_date': (NOW - timedelta(days=4)).date().isoformat(),
+        }
+        state = build_customer_state(customers, [auto], [], as_of=NOW)
+        self.assertFalse(state['obligations'].get(CID))
+
+    def test_old_system_send_never_appears_in_customer_activity_views(self):
+        previous = application.get_human_contact_rows(self.spreadsheet)
+        self.append_contact_row(
+            customer_id=CID, contact_id='legacy-outbound',
+            date_time=(NOW - timedelta(days=1)).isoformat(),
+            contact_channel='Mejl', result='Mejlförslag skickat',
+            activity_source='crm_email', email_id='retired-system-send',
+        )
+        self.assertEqual(application.get_human_contact_rows(self.spreadsheet), previous)
+        for url in ('/customers/Butik%20A/stats', '/contact-log',
+                    '/planning/activities?start=2026-07-27&end=2026-08-02'):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200, response.get_json())
+                self.assertNotIn('Mejlförslag skickat', str(response.get_json()))
+        customers = application.get_customer_rows(self.spreadsheet)
+        users = application.get_user_rows(self.spreadsheet)
+        self.assertEqual(
+            application.build_freezer_summary(application.get_contact_rows(self.spreadsheet), customers, users),
+            application.build_freezer_summary(previous, customers, users),
+        )
+
     def test_runtime_files_do_not_reference_retired_worksheet_names(self):
         root = Path(__file__).resolve().parents[2]
         files = list((root/'web-app').glob('*.py')) + list((root/'scripts').glob('*.py'))

@@ -182,24 +182,6 @@ class CoordinatedRouteSaveTests(PlanningApiTestCase):
         self.assertTrue(all(count == len(a.get_customer_rows(self.spreadsheet))
                             for count in sizes))
 
-    def test_retired_tracking_tables_never_change_route_sources(self):
-        rows = [{"customer_id": "11111111-1111-4111-8111-111111111111"}]
-        messages = fixture.FakeWorksheet(
-            "email_messages", ["email_id", "customer_id", "customer"],
-            [{"email_id": "selected-mail", "customer_id": rows[0]["customer_id"]},
-             {"email_id": "other-mail", "customer_id": "33333333-3333-4333-8333-333333333333"}])
-        recipients = fixture.FakeWorksheet(
-            "email_recipients", ["email_id", "status"],
-            [{"email_id": "selected-mail", "status": "sent"},
-             {"email_id": "other-mail", "status": "sent"}])
-        self.spreadsheet.sheets["email_messages"] = messages
-        self.spreadsheet.sheets["email_recipients"] = recipients
-        before = a.route_decision_source_version(self.spreadsheet, rows)
-        recipients.update_cell(3, 2, "opened")
-        self.assertEqual(a.route_decision_source_version(self.spreadsheet, rows), before)
-        recipients.update_cell(2, 2, "bounced")
-        self.assertEqual(a.route_decision_source_version(self.spreadsheet, rows), before)
-
     def test_two_concurrent_saves_create_one_route(self):
         token = self.preview()
         user = a.get_user_rows(self.spreadsheet)[0]
