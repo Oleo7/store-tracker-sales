@@ -157,9 +157,11 @@ def classify_legacy_completed_followups(contact_rows, planned_activity_rows, *, 
     booking is reported as uncertainty and cannot resolve the old commitment.
     No contact notes or credentials are included in this report.
     """
+    from priority import is_human_contact
     current = instant(as_of)
     contacts = [row for row in _rows(contact_rows)
-                if instant(row.get("date_time")) and instant(row.get("date_time")) <= current]
+                if is_human_contact(row) and instant(row.get("date_time"))
+                and instant(row.get("date_time")) <= current]
     by_id = {text(row.get("contact_id")): row for row in contacts if text(row.get("contact_id"))}
     plans = _rows(planned_activity_rows)
     result = []
@@ -365,6 +367,9 @@ def build_customer_state(customers, contact_rows, planned_activity_rows, state_e
         if skipped and skipped.timestamp() <= current.timestamp():
             actions[cid].append((skipped, "skip", aid))
     for row in contacts:
+        # Legacy dispatch events are audit rows, not customer follow-up promises.
+        if not is_human_contact(row):
+            continue
         source_id = stable_contact_source_id(row)
         due = instant(row.get("follow_up_date"))
         if not due or source_id in represented or contact_counts[source_id] != 1:

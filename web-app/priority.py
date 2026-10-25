@@ -583,8 +583,11 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
     contact_count_30d = defaultdict(int)
     snapshot = _snapshot_time(as_of)
     source_rows = list(sales_activities)
+    # Retain automated events in source_rows for audit/reconciliation, never as
+    # human contact evidence or inputs to active priority and follow-up features.
+    human_rows = [row for row in source_rows if is_human_contact(row)]
     today = snapshot.date()
-    sales_activities = _canonicalize_rows(sales_activities, customers, name_field="customer", number_field="customer_number")
+    sales_activities = _canonicalize_rows(human_rows, customers, name_field="customer", number_field="customer_number")
     inferred_by_number, _inferred_by_name = _inferred_ids(
         sales_activities, name_field="customer", number_field="customer_number"
     )
@@ -612,7 +615,6 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
                 "sort_key": (_event_timestamp(row.get("date_time")), idx),
                 "datetime": contact_dt,
                 "row": row,
-                "is_automated": not is_human_contact(row),
                 "follow_up_date": parse_date(row.get("follow_up_date")),
                 "customer_id": customer_id,
                 "customer_number": str(row.get("customer_number") or "").strip(),
@@ -625,8 +627,8 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
     for identity_key, activities in activities_by_customer.items():
         activities.sort(key=lambda activity: activity["sort_key"])
         latest_activity = activities[-1]
-        human_activities = [activity for activity in activities if not activity["is_automated"]
-                            and str(activity["row"].get("result") or "").strip().casefold() not in {"kontakt tillåten", "återkom ej", "kontakta ej", "ring ej"}]
+        human_activities = [activity for activity in activities
+                            if str(activity["row"].get("result") or "").strip().casefold() not in {"kontakt tillåten", "återkom ej", "kontakta ej", "ring ej"}]
         latest_human = human_activities[-1] if human_activities else None
         reached = [a for a in human_activities if normalize_contact_result(a["row"].get("result")) in REACHED_RESULTS]
         last_reached = reached[-1] if reached else None

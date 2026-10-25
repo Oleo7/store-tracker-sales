@@ -463,7 +463,7 @@ def performance_step(step):
 def enforce_crm_emergency_stop():
     # Server-side stop, including direct API clients. Read-only access and
     # authentication remain available for investigation. Drain/restart workers
-    # to stop already in-flight operations; this cannot recall sent mail.
+    # to stop already in-flight operations.
     stopped = str(os.environ.get("CRM_RISKY_OPERATIONS_STOPPED", "false")).casefold() != "false"
     if stopped and request.method not in {"GET", "HEAD", "OPTIONS"} and request.path not in {"/login", "/logout"}:
         return jsonify(ok=False, code="crm_operations_stopped",
@@ -1708,6 +1708,11 @@ def get_contact_rows(spreadsheet):
         expected_columns=CONTACT_COLUMNS,
         required_columns=CONTACT_REQUIRED_COLUMNS,
     )
+
+
+def get_human_contact_rows(spreadsheet):
+    """Human seller contacts; automated historical dispatches stay in raw audit history."""
+    return [row for row in get_contact_rows(spreadsheet) if is_human_contact(row)]
 
 
 def get_customer_rows(spreadsheet):
@@ -3293,6 +3298,8 @@ def build_freezer_summary(contact_rows, customers, users):
     customer_lookup = CustomerLookup(customers)
     latest_contact_by_customer = {}
     for idx, contact in enumerate(contact_rows):
+        if not is_human_contact(contact):
+            continue
         customer = related_row_customer(
             contact,
             customers,
@@ -4450,7 +4457,7 @@ def get_customers():
         None if user_is_admin(user) else CustomerLookup(customers)
     )
     contact_rows = accessible_contact_rows(
-        get_contact_rows(spreadsheet),
+        get_human_contact_rows(spreadsheet),
         customers,
         user,
         customer_lookup=customer_lookup,
@@ -4481,7 +4488,7 @@ def get_customers():
 def get_contact_log():
     spreadsheet = get_spreadsheet_with_retry()
     # Contact-log is an authenticated, read-only cross-team view by design.
-    contact_rows = get_contact_rows(spreadsheet)
+    contact_rows = get_human_contact_rows(spreadsheet)
     filters = get_contact_log_filter_values(request.args)
     return jsonify(build_contact_log_payload(contact_rows, filters))
 
@@ -4490,7 +4497,7 @@ def get_contact_log():
 def export_contact_log():
     spreadsheet = get_spreadsheet_with_retry()
     # Keep export aligned with the authenticated cross-team Contact-log view.
-    contact_rows = get_contact_rows(spreadsheet)
+    contact_rows = get_human_contact_rows(spreadsheet)
     filters = get_contact_log_filter_values(request.args)
     payload = build_contact_log_payload(contact_rows, filters)
     workbook = build_xlsx(payload["columns"], payload["rows"])
@@ -4595,7 +4602,7 @@ def build_customer_timeline(
     canonical_rows = customer_record is not None and customers is not None
     timeline = [
         _timeline_contact_item(contact) for contact in contact_rows
-        if canonical_rows or normalize_key(contact.get("customer")) == customer_key
+        if is_human_contact(contact) and (canonical_rows or normalize_key(contact.get("customer")) == customer_key)
     ]
     timeline.sort(key=_timeline_sort_value, reverse=True)
     return timeline
@@ -4757,7 +4764,7 @@ def get_customer_stats(customer_name):
             unique_references.add(o["Reference"].strip())
 
     # Contacts
-    all_contact_rows = get_contact_rows(spreadsheet)
+    all_contact_rows = get_human_contact_rows(spreadsheet)
     contact_rows = related_rows_for_customer(
         all_contact_rows,
         customers,
@@ -5697,7 +5704,7 @@ def build_customer_insights_response(spreadsheet, today, user, global_snapshot):
 
     # Compute insights for all customers
     all_names = (
-        {normalize_key(c.get("customer")) for c in contact_rows if normalize_key(c.get("customer"))}
+        {normalize_key(c.get("customer")) for c in contact_rows if is_human_contact(c) and normalize_key(c.get("customer"))}
         | set(latest_order.keys())
         | set(order_references.keys())
         | set(latest_delivery.keys())
@@ -6955,7 +6962,8 @@ def planning_activities():
         (row_index, row)
         for row_index, row in indexed_contacts
         if (
-            contact_currently_owned_by(
+            is_human_contact(row)
+            and contact_currently_owned_by(
                 row,
                 owner,
                 planning_customers,
@@ -10745,7 +10753,7 @@ def build_planning_route_preview(
                 activity_customer_identity(activity)
             )
     try:
-        for contact in get_contact_rows(spreadsheet):
+        for contact in get_human_contact_rows(spreadsheet):
             if parse_date_value(contact.get("date_time")) == route_date:
                 blocked_candidate_identities.add(
                     str(contact.get("customer_id") or "").strip()
@@ -12608,7 +12616,7 @@ def get_followup_insights():
     for customer in customers:
         customers_by_name[normalize_key(customer["customer"])] = customer
 
-    contact_rows = get_contact_rows(spreadsheet)
+    contact_rows = get_human_contact_rows(spreadsheet)
     order_rows = get_order_rows(spreadsheet)
     calculation_started = time.perf_counter()
     dfp_top_weeks_2026 = build_dfp_top_weeks(order_rows, year=2026, limit=5)
