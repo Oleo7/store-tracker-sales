@@ -182,6 +182,21 @@ class CoordinatedRouteSaveTests(PlanningApiTestCase):
         self.assertTrue(all(count == len(a.get_customer_rows(self.spreadsheet))
                             for count in sizes))
 
+    def test_old_automatic_email_does_not_invalidate_a_live_route(self):
+        stops = [{'customer_id': '11111111-1111-4111-8111-111111111111'}]
+        original = a.route_decision_source_version(self.spreadsheet, stops)
+        self.append_contact_row(
+            contact_id='historic-system-send', customer_id=stops[0]['customer_id'],
+            activity_source='crm_email', email_id='retired-email',
+            result='Mejlförslag skickat', follow_up_date='',
+        )
+        self.assertEqual(a.route_decision_source_version(self.spreadsheet, stops), original)
+        self.append_contact_row(
+            contact_id='real-dialogue', customer_id=stops[0]['customer_id'],
+            result='Positiv', follow_up_date='',
+        )
+        self.assertNotEqual(a.route_decision_source_version(self.spreadsheet, stops), original)
+
     def test_two_concurrent_saves_create_one_route(self):
         token = self.preview()
         user = a.get_user_rows(self.spreadsheet)[0]

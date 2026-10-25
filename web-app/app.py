@@ -11068,6 +11068,12 @@ def route_decision_source_version(spreadsheet, stops):
             result[title] = None
             continue
         rows = worksheet_to_dicts(sheet)
+        # Historical mail dispatches and old click/open recommendations are
+        # inert audit rows, never inputs that invalidate a live route preview.
+        if title == "sales_activities":
+            rows = [r for r in rows if is_human_contact(r)]
+        elif title == "planning_suggestions":
+            rows = [r for r in rows if not is_retired_email_tracking_snapshot(r)]
         if title != "users":
             rows = [r for r in rows if str(r.get("customer_id") or "") in ids
                     or normalize_key(r.get("customer") or r.get("Customer")) in names

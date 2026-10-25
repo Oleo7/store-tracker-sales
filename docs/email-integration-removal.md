@@ -80,3 +80,7 @@ or orphan historical suggestion identities. None calls an email provider.
 
 Historical documentation predating this removal, including earlier priority
 specifications and archived QA reports, does not describe current runtime.
+
+Route-save decision fingerprints also ignore inert automatic dispatch rows and
+legacy email-open/click suggestion rows, while still responding to real seller
+contacts and active recommendation changes. A dedicated regression checks this.
