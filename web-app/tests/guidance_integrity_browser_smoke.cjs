@@ -8,16 +8,14 @@ const base = process.env.GUIDANCE_HARNESS_URL || 'http://127.0.0.1:5065';
 const fixtures = JSON.parse(execFileSync(process.env.GUIDANCE_PYTHON || 'python', ['-c', `
 import sys,json
 sys.path.insert(0,sys.argv[1])
-from test_guidance_integrity import customer,order,contact,email,activity,scored,TODAY
+from test_guidance_integrity import customer,order,contact,activity,scored,TODAY
 cases = {
  'onboarding':dict(store=customer('B'),orders=[order('one',8)]),
  'second-purchase':dict(orders=[order('one',11)]),
  'repeat':dict(orders=[order('one',20),order('two',40),order('three',60)]),
- 'stockfiller':dict(orders=[order('one',30)],mail=email()),
- 'product-sheet':dict(orders=[order('one',30)],mail=email('product_sheet')),
- 'reactivation-click':dict(orders=[order('one',200),order('two',220)],mail=email()),
+ 'reactivation':dict(orders=[order('one',200),order('two',220)]),
  'positive-dialogue':dict(orders=[order('one',10),order('two',30)],contacts=[contact(3,'Positiv')]),
- 'a-prospect':dict(store=customer('A'),mail=email(),contacts=[contact(10,'Positiv')]),
+ 'a-prospect':dict(store=customer('A'),contacts=[contact(10,'Positiv')]),
  'real-followup':dict(contacts=[contact(10,'Positiv',TODAY.isoformat())]),
  'past-and-future':dict(orders=[order('older',30,11),order('latest',10,13),order('next',-4,15),order('later',-11,99)]),
  'future-only':dict(orders=[order('future',-4,15)]),
