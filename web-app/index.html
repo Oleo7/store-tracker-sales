@@ -4237,7 +4237,6 @@
 </div>
 
 
-<!-- ═══════════════ SETTINGS VIEW ═══════════════ -->
 
 
 <!-- ═══════════════ MAP VIEW ═══════════════ -->
@@ -4262,7 +4261,6 @@
 </div>
 
 
-<!-- ═══════════════ EMAIL PROPOSAL MODAL ═══════════════ -->
 
 
 <!-- ═══════════════ PLANNING DIALOG ═══════════════ -->
@@ -4665,6 +4663,7 @@
   function getAvailableValues(key) {
     if (key === "status") return Object.keys(STATUS_KEYS_BY_LABEL);
     // Insight-based filters are not cascaded
+    if (["focus", "risk", "delivery", "latestContact"].includes(key)) return _sheetValues[key];
 
     // Apply all active filters except the one being opened
     let base = customers;
@@ -5141,6 +5140,14 @@
     document.getElementById("clear-filters-row").style.display = anyActive ? "block" : "none";
   }
 
+
+  document.getElementById("clear-filters-btn").addEventListener("click", () => {
+  Object.keys(filterState).forEach(key => filterState[key].clear());
+  listWorkFilter = "all";
+  Object.keys(_chipIds).forEach(key => updateChip(key));
+  document.getElementById("clear-filters-row").style.display = "none";
+  renderList();
+});
 
   function getFilteredCustomers({ includeStatus = true } = {}) {
     const q = searchQuery.toLowerCase();
@@ -10588,6 +10595,11 @@
     if (e.key === "Enter") document.getElementById("login-btn").click();
   }));
 
+
+  document.getElementById("logout-btn").addEventListener("click", async () => {
+  try { await fetch(`${API}/logout`, { method: "POST" }); } catch {}
+  window.location.reload();
+});
 
   checkLogin();
 </script>
