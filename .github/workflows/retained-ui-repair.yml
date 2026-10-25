@@ -1,0 +1,80 @@
+name: Scoped retained UI repair
+on:
+  push:
+    branches: [cleanup/remove-email-proposals-brevo]
+    paths: [.github/workflows/retained-ui-repair.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.repository == 'Oleo7/store-tracker-sales' && github.ref == 'refs/heads/cleanup/remove-email-proposals-brevo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cleanup/remove-email-proposals-brevo
+      - name: Restore retained UI only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('web-app/index.html')
+          s = p.read_text()
+          anchor = '    // Insight-based filters are not cascaded\n'
+          assert s.count(anchor) == 1
+          assert 'if (["focus", "risk", "delivery", "latestContact"].includes(key))' not in s
+          s = s.replace(anchor, anchor + '    if (["focus", "risk", "delivery", "latestContact"].includes(key)) return _sheetValues[key];\n', 1)
+          anchor = '  function getFilteredCustomers({ includeStatus = true } = {}) {'
+          assert s.count(anchor) == 1
+          s = s.replace(anchor, '''  document.getElementById("clear-filters-btn").addEventListener("click", () => {
+            Object.keys(filterState).forEach(key => filterState[key].clear());
+            listWorkFilter = "all";
+            Object.keys(_chipIds).forEach(key => updateChip(key));
+            document.getElementById("clear-filters-row").style.display = "none";
+            renderList();
+          });
+
+          ''' + anchor, 1)
+          anchor = '  checkLogin();'
+          assert s.count(anchor) == 1
+          s = s.replace(anchor, '''  document.getElementById("logout-btn").addEventListener("click", async () => {
+            try { await fetch(`${API}/logout`, { method: "POST" }); } catch {}
+            window.location.reload();
+          });
+
+          ''' + anchor, 1)
+          s = re.sub(r'^<!-- [^\n]*(?:SETTINGS VIEW|EMAIL PROPOSAL MODAL)[^\n]*-->\n', '', s, flags=re.M)
+          p.write_text(s)
+          p = Path('web-app/tests/email_removal_frontend.cjs')
+          s = p.read_text()
+          s += '''
+          // Shared customer filters and logout must survive removal of email-only controls.
+          assert.ok(html.includes('document.getElementById("clear-filters-btn").addEventListener'));
+          assert.ok(html.includes('document.getElementById("logout-btn").addEventListener'));
+          const filterStart = html.indexOf('function getAvailableValues(key)');
+          const filterEnd = html.indexOf('function renderFilterOptions', filterStart);
+          assert.ok(filterStart >= 0 && filterEnd > filterStart);
+          const optionsContext = {
+            STATUS_KEYS_BY_LABEL: {Alla:'all'},
+            _sheetValues: {focus:['Andra kopet'],risk:['Risk'],delivery:['2026-10'],latestContact:['Recent']},
+            _customerFieldMap: {city:'city'},
+            customers: [{city:'Test city'}],
+            filterState: {city:new Set()},
+          };
+          vm.createContext(optionsContext);
+          vm.runInContext(html.slice(filterStart, filterEnd), optionsContext);
+          for (const key of ['focus','risk','delivery','latestContact']) {
+            assert.equal(optionsContext.getAvailableValues(key), optionsContext._sheetValues[key], key);
+          }
+          console.log('Retained UI contracts: insight filter options, clear filters and logout PASS');
+          '''
+          p.write_text(s)
+          PY
+          node web-app/tests/email_removal_frontend.cjs
+          git diff --check
+          git config user.name 'Store Tracker maintenance'
+          git config user.email 'noreply@github.com'
+          git add web-app/index.html web-app/tests/email_removal_frontend.cjs
+          git commit -m 'Preserve shared filters and logout after email removal [skip render]'
+          git push origin HEAD:cleanup/remove-email-proposals-brevo
