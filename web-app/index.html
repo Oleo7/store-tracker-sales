@@ -6088,7 +6088,7 @@
     const mobile = ["d-note-section", "d-order-section", "d-contact-info-section", "d-latest-section", "d-contact-section", ];
     if (detailDesktopMedia.matches) {
       ["d-note-section", "d-contact-info-section", "d-contact-section"].forEach(id => left.append(document.getElementById(id)));
-
+      ["d-order-section", "d-latest-section"].forEach(id => right.append(document.getElementById(id)));
     } else {
       mobile.forEach(id => left.parentElement.insertBefore(document.getElementById(id), left));
     }
