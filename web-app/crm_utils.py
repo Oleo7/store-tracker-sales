@@ -1,4 +1,4 @@
-"""Provider-independent CRM validation, clock and catalog helpers."""
+"""Provider-independent CRM validation, clock and schema helpers."""
 from datetime import datetime, timezone
 from email.utils import parseaddr
 from zoneinfo import ZoneInfo
@@ -7,6 +7,7 @@ import re
 USER_COLUMNS = ["user_name", "name", "role", "email", "phone", "password", "active", "admin"]
 SETTINGS_COLUMNS = ["key", "value", "description"]
 STOCKHOLM_TIMEZONE = ZoneInfo("Europe/Stockholm")
+
 
 def is_yes(value):
     return str(value or "").strip().casefold() in {"y", "yes", "ja", "1", "true", "on"}
@@ -39,10 +40,6 @@ def split_email_values(*values):
             seen.add(key)
             result.append({"email": email, "valid": is_valid_email(email)})
     return result
-
-
-
-
 
 
 def stockholm_now():
@@ -88,5 +85,3 @@ def stockholm_time_text(value=None):
     else:
         parsed = parsed.astimezone(STOCKHOLM_TIMEZONE)
     return parsed.strftime("%Y-%m-%d %H:%M:%S")
-
-
