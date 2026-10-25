@@ -883,14 +883,39 @@ def resolve_historical_seller(activity, users):
     return "", "ambiguous_seller" if len(matches) > 1 else "unknown_seller"
 
 
+# Pre-removal recommendation events remain in historical audit worksheets,
+# but are not valid inputs to active attribution or approximate score snapshots.
+_RETIRED_EMAIL_TRACKING_TOKENS = (
+    "email_open", "email_click", "email_deliver", "email_proposal",
+    "email_intent", "stockfiller_click", "product_sheet_click",
+)
+
+
+def is_retired_email_tracking_snapshot(row):
+    if not isinstance(row, dict):
+        return False
+    for field in (
+        "primary_trigger_type", "primary_trigger_key",
+        "source_trigger_key", "covered_trigger_keys_json",
+    ):
+        value = str(row.get(field) or "").casefold().replace("-", "_")
+        if any(token in value for token in _RETIRED_EMAIL_TRACKING_TOKENS):
+            return True
+    return False
+
+
 def _legacy_snapshot_maps(planning_suggestions=(), score_events=()):
     by_suggestion = {}
     for row in planning_suggestions or ():
+        if is_retired_email_tracking_snapshot(row):
+            continue
         suggestion_id = _text(row.get("suggestion_id"))
         if suggestion_id:
             by_suggestion[suggestion_id] = row
     events_by_suggestion = defaultdict(list)
     for row in score_events or ():
+        if is_retired_email_tracking_snapshot(row):
+            continue
         suggestion_id = _text(row.get("suggestion_id"))
         if suggestion_id:
             events_by_suggestion[suggestion_id].append(row)

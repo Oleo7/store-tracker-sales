@@ -54,3 +54,29 @@ request, preserve pre-contact priority, and remain idempotent. Tests additionall
 prove that tracking data, even if reintroduced into an old workbook, cannot change
 current priorities or route source fingerprints. Desktop/mobile browser tests
 exercise the shipped HTML and JavaScript against an isolated synthetic CRM.
+
+## Independent deep audit and regression closure
+
+A second source-wide audit of current production modules, scripts, frontend,
+88 test files and historical documentation found extra effects from old
+automatic email records after the provider APIs had been removed. PR #1 now
+isolates these rows using saved email_id / activity_source=crm_email markers.
+Historical sends cannot contribute to live priority features, last-contact
+dates, followup commitments, route exclusions, customer timelines, calendars,
+contact logs, freezer observations or sales statistics. Manually logged email
+contacts remain supported.
+
+Sales analytics and calibration also reject historical recommendations whose
+primary or covered triggers derive from retired email open/click, product-sheet
+click or Stockfiller click tracking; historical worksheet rows are not modified.
+Regression tests enforce that these legacy events cannot be used as approximate
+contact priority snapshots or receive sales calibration attribution.
+
+Deliberate inert compatibility fields remain: sales_activities.email_id,
+activity_source=crm_email, old resolved_by_type=email, and the empty
+active_email_intent_event value in legacy suggestion context hashes. Removing
+these without a separate data migration would misclassify old automated sends
+or orphan historical suggestion identities. None calls an email provider.
+
+Historical documentation predating this removal, including earlier priority
+specifications and archived QA reports, does not describe current runtime.

@@ -114,7 +114,7 @@ class Phase4CalibrationTests(TestCase):
             "event_id": "e-1", "event_type": "suggestion_planned",
             "occurred_at": "2026-08-01 09:00:00", "customer_id": "cid-1",
             "suggestion_id": "s-1", "decision_context_hash": "ctx",
-            "primary_trigger_key": "stockfiller_click_followup",
+            "primary_trigger_key": "strategic_contact_due",
             "score_version": "v2", "lifecycle": "prospect",
             "recommendation_eligible": "Y", "priority_score": "71",
             "intent_timing": "68", "value_index": "70", "strategic_index": "25",

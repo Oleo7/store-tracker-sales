@@ -191,6 +191,47 @@ class RemovedEmailIntegrationTests(PlanningApiTestCase):
             application.build_freezer_summary(previous, customers, users),
         )
 
+
+    def test_old_tracking_suggestions_and_score_events_are_excluded_from_analysis(self):
+        from sales_coaching import (
+            _legacy_snapshot_maps, is_retired_email_tracking_snapshot,
+            resolve_priority_snapshot,
+        )
+        retired = {
+            'suggestion_id': 'old-mail-trigger', 'event_id': 'old-mail-event',
+            'customer_id': CID, 'event_type': 'suggestion_created',
+            'occurred_at': (NOW - timedelta(days=12)).isoformat(),
+            'primary_trigger_type': 'email_open_followup',
+            'primary_trigger_key': 'email_open_followup',
+            'covered_trigger_keys_json': '["positive_dialogue_followup","email_open_followup"]',
+            'priority_score': '90', 'priority_score_at_creation': '90',
+        }
+        valid = {
+            'suggestion_id': 'human-trigger', 'event_id': 'human-event',
+            'customer_id': CID, 'event_type': 'suggestion_created',
+            'occurred_at': (NOW - timedelta(days=8)).isoformat(),
+            'primary_trigger_type': 'positive_dialogue_followup',
+            'primary_trigger_key': 'positive_dialogue_followup',
+            'priority_score': '55',
+        }
+        self.assertTrue(is_retired_email_tracking_snapshot(retired))
+        self.assertFalse(is_retired_email_tracking_snapshot(valid))
+        suggestions, events = _legacy_snapshot_maps([retired, valid], [retired, valid])
+        self.assertNotIn('old-mail-trigger', suggestions)
+        self.assertNotIn('old-mail-trigger', events)
+        self.assertEqual(
+            resolve_priority_snapshot(
+                {'date_time': NOW.isoformat(), 'source_suggestion_id': 'old-mail-trigger'},
+                suggestion_by_id=suggestions, events_by_suggestion=events,
+            )['quality'], 'missing',
+        )
+        rows = application.build_calibration_rows(
+            [retired, valid], [], application.get_customer_rows(self.spreadsheet),
+            today=NOW.date(),
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['primary_trigger_key'], 'positive_dialogue_followup')
+
     def test_runtime_files_do_not_reference_retired_worksheet_names(self):
         root = Path(__file__).resolve().parents[2]
         files = list((root/'web-app').glob('*.py')) + list((root/'scripts').glob('*.py'))

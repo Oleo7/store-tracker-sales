@@ -73,6 +73,7 @@ from sales_coaching import (
     canonical_activity_source,
     normalize_contact_type as normalize_coaching_contact_type,
     normalize_result_class,
+    is_retired_email_tracking_snapshot,
     strip_internal_analysis,
 )
 from commercial_orders import order_volume, commercial_order
@@ -5171,7 +5172,8 @@ def calibration_score_band(value):
 
 
 def build_calibration_rows(score_events, order_rows, customers, *, today=None):
-    """Event observations, not contacts. Credit an order to one created suggestion."""
+    """Only non-retired tracking events can enter calibration and receive order credit."""
+    score_events = [row for row in score_events if not is_retired_email_tracking_snapshot(row)]
     today = today or stockholm_today()
     by_id = {
         normalize_key(row.get("customer_id")): row
