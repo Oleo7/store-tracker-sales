@@ -128,7 +128,7 @@ class RouteAndPlanningV22Tests(TestCase):
         past = {"customer_id": target, "planned_activity_id": "old", "scheduled_at": "2026-08-09T09:00:00+02:00", "status": "planned", "contact_type": "phone", **owner}
         later_contact = {"customer_id": target, "date_time": "2026-08-09 09:00:01"}
         snapshot = {"customers": stores, "priorities": scored_rows, "contact_rows": [later_contact]}
-        with app_module.app.test_request_context(), patch.object(app_module, "stockholm_now", return_value=now), patch.object(app_module, "get_authoritative_priority_snapshot", return_value=snapshot), patch.object(app_module, "priority_workflow_suppressions", return_value={}), patch.object(app_module, "read_planned_activity_snapshot", return_value=(None, [], [(2, past)])):
+        with app_module.app.test_request_context(), patch.object(app_module, "stockholm_now", return_value=now), patch.object(app_module, "get_authoritative_priority_snapshot", return_value=snapshot), patch.object(app_module, "read_planned_activity_snapshot", return_value=(None, [], [(2, past)])):
             pools = []
             for channel in ("phone", "email", "visit", None):
                 for row in scored_rows:
