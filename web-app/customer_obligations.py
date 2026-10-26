@@ -14,7 +14,6 @@ STATE_EVENT_COLUMNS = [
     "fingerprint", "payload_json", "recorded_at",
 ]
 OPEN_STATUSES = {"open", "scheduled", "needs_review"}
-classify-only constants
 
 def text(value):
     return str(value or "").strip()
