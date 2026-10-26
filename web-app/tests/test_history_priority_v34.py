@@ -61,7 +61,6 @@ def model(contacts=(), plans=(), orders=(), events=(), now=NOW):
     return row, st
 
 
-class HistoryReconciliationTests(TestCase):
 class ContactAndRankingTests(TestCase):
     def test_date_alone_never_lifts_negative_contact_pause(self):
         for proof in (False,True):
@@ -181,4 +180,3 @@ class TimestampAndIdentityRegressionTests(TestCase):
         self.assertEqual(row['work_priority_raw'],0)
 
 
-class SourceWriteSafetyTests(PlanningApiTestCase):

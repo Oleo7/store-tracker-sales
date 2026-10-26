@@ -73,9 +73,6 @@ class Phase4PriorityContinuityTests(TestCase):
         self.assertEqual(with_history, baseline)
 
 
-class Phase4LegacyFollowupTests(TestCase):
-
-
 class Phase4CalibrationTests(TestCase):
     def test_score_band_boundaries(self):
         values = {

@@ -883,4 +883,3 @@ class ConcurrentEndpointAvailabilityTests(PlanningApiTestCase):
         )
 
 
-class LegacyEmailIdentityTests(TestCase):
