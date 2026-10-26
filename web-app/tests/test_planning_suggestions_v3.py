@@ -100,7 +100,7 @@ class PlanningSuggestionV3IntegrationTests(PlanningApiTestCase):
         }
         with patch.object(
             app_module, "get_authoritative_priority_snapshot", return_value=snapshot
-        ), patch.object(app_module, "priority_workflow_suppressions", return_value={}):
+        ):
             candidates = app_module.planning_suggestion_candidates(
                 self.spreadsheet, {"user_name": "olle", "name": "Olle"}
             )

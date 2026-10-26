@@ -360,7 +360,7 @@ const buildInsightDropdowns = () => {}, updateChip = () => {};
 const showToast = text => toasts.push(text);
 ${['fetchJsonShared','loadInsights','loadPlanningAttention','loadPlanningWeek','refreshWorkflowViews',
    'activeViewName','showView','renderList','esc','escAttr',
-   'customerInsightKey','getCustomerInsight','getCustomerGuidance','getCustomerListGuidance','hasPriorityScore',
+   'customerInsightKey','getCustomerInsight','getCustomerListGuidance',
    'getGuidanceStatusClass','getNextActionColorClass','guidanceContactLabel','getNextActionHtml',
    'getPrioritySummaryHtml','getGuidanceStatusLabel','getWorkPriorityValue','sortedModelValue','getCardDateHtml','getDeliveryVolumeText',
    'getCustomerPlanningSeed','planningContactTypeKey','customerCanStartContact','planningDateFromKey','planningDateKeyFromIso','planningTimeFromIso',
@@ -784,7 +784,7 @@ vm.runInContext(`(async () => {
     assert.notEqual(sharedJsonRequests.get('/api/customer-insights'),sharedNetworkPromise);
     requests[first+4].resolve(guidancePayload('shared-fresh','2026-10-10','planned','Shared fresh guidance'));
     await tick();
-    assert.equal(getCustomerGuidance(customers[0]).planned_activity_id,'shared-fresh');
+    assert.equal(getCustomerListGuidance(customers[0]).planned_activity_id,'shared-fresh');
     assert.ok(list.innerHTML.includes('Shared fresh guidance')); assert.ok(!list.innerHTML.includes('Shared stale guidance'));
     assert.equal(listRenders,retainedSharedRenders+1); assert.equal(insightsRevision,retainedSharedRevision+1);
     assert.equal(requests.length-first,5); assert.equal(insightsForegroundRequests,0);

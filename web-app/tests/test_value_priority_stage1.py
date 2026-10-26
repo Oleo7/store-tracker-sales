@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from priority import (build_priority_customers, build_order_features,
-                      build_contact_features, apply_workflow_suppressions)
+                      build_contact_features)
 from value_prioritization import (contact_factor, business_days_elapsed, complete_deliveries,
     business_opportunity, validate_policy, POLICY, next_business_day_retry,
     store_format, empirical_format_prior, contact_opportunity)

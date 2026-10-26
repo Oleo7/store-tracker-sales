@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from test_planning import PlanningApiTestCase, NOW
 import app as app_module
 from customer_obligations import build_customer_state, attention_items, instant
-from priority import build_priority_customers, build_order_features, build_contact_features, apply_workflow_suppressions
+from priority import build_priority_customers, build_order_features, build_contact_features
 
 ZONE = ZoneInfo('Europe/Stockholm')
 AT = datetime(2026, 10, 21, 12, tzinfo=ZONE)
@@ -191,10 +191,6 @@ class ActivityChronologyTests(TestCase):
             row={**contact(),**extra};self.assertEqual(len(missed(state([plan()],[row]))),1)
         orders=[{'customer_id':CID,'Customer':'Butik A','Reference':'o','Delivery date':'2026-10-20','Total weight':'20'}]
         self.assertEqual(len(missed(state([plan()],order_rows=orders))),1)
-
-    def test_workflow_cannot_change_commercial_value_or_priority(self):
-        raw=[{'customer_id':CID,'priority_score':75,'business_value_raw':42}]
-        self.assertEqual(apply_workflow_suppressions(raw,{CID:'dismissed'}),raw)
 
     def test_same_day_events_keep_actual_instant_order(self):
         rows=[plan('early','2026-10-19T09:00+02:00'),plan('late','2026-10-19T15:00+02:00')]

@@ -75,8 +75,8 @@ class RouteContactPolicyTests(TestCase):
 
     def route(self, snapshot, *, legacy=False, required=(), day=None):
         with patch.object(app_module, "get_authoritative_priority_snapshot", return_value=snapshot), patch.object(
-            app_module, "priority_workflow_suppressions", return_value={}
-        ), patch.object(app_module, "get_route_travel_time_provider", return_value=ConstantRoadProvider()):
+            app_module, "get_route_travel_time_provider", return_value=ConstantRoadProvider()
+        ):
             if legacy:
                 return app_module.calculate_route_proposal_for_user(
                     spreadsheet=self.spreadsheet, start=GPS, client_requested_rows=(2, 4), user=OWNER,

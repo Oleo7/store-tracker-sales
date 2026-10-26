@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from priority import build_order_features, build_contact_features, build_priority_customers, apply_workflow_suppressions
+from priority import build_order_features, build_contact_features, build_priority_customers
 
 NOW = datetime(2026, 10, 18, 9, 43, 38, tzinfo=ZoneInfo("Europe/Stockholm"))
 
@@ -118,9 +118,7 @@ class ReviewedContactPolicyTests(TestCase):
         self.assertTrue(row["requires_handling"])
         self.assertEqual(row["list_guidance"]["reason_code"], "unanswered_retry_wait")
         self.assertEqual(row["contact_not_before"], "2026-10-20")
-        paused = apply_workflow_suppressions([row], {"a": "snoozed"})[0]
-        self.assertEqual(paused["list_guidance"]["reason_code"], "unanswered_retry_wait")
-        self.assertCoherent(paused)
+        self.assertCoherent(row)
 
     def test_new_agreement_for_today_can_override_failed_attempt_pause(self):
         promise=obligation(0,source_created_at=(NOW-timedelta(hours=1)).isoformat())
@@ -362,8 +360,7 @@ class ReviewedContactPolicyTests(TestCase):
         self.assertEqual(row["list_guidance"]["status_key"], "data_missing")
         self.assertCoherent(row)
 
-    def test_snooze_cannot_zero_an_unrelated_due_promise(self):
+    def test_due_promise_retains_current_priority(self):
         row = replay(obligations={"a": [obligation(5)]})["a"]
-        paused = apply_workflow_suppressions([row], {"a": "snoozed"})[0]
-        self.assertEqual(paused["contact_priority_raw"], row["contact_priority_raw"])
-        self.assertCoherent(paused)
+        self.assertGreaterEqual(row["contact_priority_raw"], 0)
+        self.assertCoherent(row)

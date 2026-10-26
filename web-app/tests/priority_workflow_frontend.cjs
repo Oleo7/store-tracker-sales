@@ -26,7 +26,7 @@ const showContactSaveError=()=>{},updateContactChannelFields=()=>{},updateFollow
 ${['planningDateFromKey','planningDateKeyFromIso','planningTimeFromIso','planningStockholmOffset','planningStockholmIso','planningAttentionItemIsEligible',
 'mergePlanningAttentionItems','loadPlanningAttention','customerCanExecutePlanned',
 'customerCanStartContact','sortedModelValue','getWorkPriorityValue',
-'stableCustomerTieBreak','compareDescendingMissingLast','contactPrioritySort','mapPriorityValue','mapPrioritySort','prioritySort','hasPriorityScore','segmentRank','planningContactTypeKey','getCustomerPlanningSeed','applyConfirmedObligationUpdate','openContactFormForCustomer'].map(source).join('\n')}
+'stableCustomerTieBreak','compareDescendingMissingLast','contactPrioritySort','mapPriorityValue','mapPrioritySort','planningContactTypeKey','getCustomerPlanningSeed','applyConfirmedObligationUpdate','openContactFormForCustomer'].map(source).join('\n')}
 `,context);
 vm.runInContext(`(async()=>{
  const item=(id,date='2026-10-17',extra={})=>({obligation_id:id,customer_id:'customer-1',item_type:'overdue_follow_up',due_date:date,status:'open',...extra});

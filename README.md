@@ -1,119 +1,81 @@
-# Synka GIT repo till lokalt (skicka in i terminalen)
-git status
-git pull origin master
+# Store Tracker Sales
 
-# Aktivera virtuell miljö och..
-# Testa ändringar lokalt
-.\.venv\Scripts\python.exe -m pip install -r .\web-app\requirements.txt
-.\.venv\Scripts\python.exe .\web-app\app.py
+Kodbas för ett säljorienterat CRM med Flask, Google Sheets, kundprioritering,
+kontaktlogg, kalender, ruttplanering och säljuppföljning.
 
+**Det här är ett separat repository från originalet `Oleo7/store-tracker`.**
+Ändringar i det här repot får inte användas för att uppdatera originalets kod
+eller originaldatabasen `CRM_DATABASE`.
 
-# Deploy ändringar (skicka in i terminalen)
-git status         --> se vilka filer som ändrats
-git add            --> filen du vill lägga till: git add .\README.md
-git commit -m      --> fil att lägga till inom "": git commit -m ".\README.md"
-git push           --> skicka ändringarna till github
+## Syfte med denna version
 
-# Store Tracker
+Det här repot förbereds för överlämning till en utvecklarkollega. Det är **inte
+ännu ett företagsoberoende eller multitenant CRM**: flera aktiva regler,
+inställningar och integrationer är Polarbär-specifika.
 
-A mobile-friendly web app for sales reps to track store visits, built with Flask and Google Sheets as the backend.
+PR1 tog bort automatiska mejlförslag/Brevo. PR2 tog bort verifierat död kod.
+Den påföljande överlämningsrensningen tar bort ytterligare oanvända hjälpare och
+inaktiva workflow-adaptrar utan att migrera befintlig data.
 
-## Project Structure
+**Ingen ny Render-miljö, ny Google Sheet eller driftsättning krävs för att granska
+och vidareutveckla repositoryt.** Det befintliga `render.yaml` är kvar som
+referens men ska inte användas för att oavsiktligt skapa eller ändra en tjänst.
 
-```
-store_tracker/
-  web-app/                  # Flask web application
-    app.py
-    index.html
-    requirements.txt
-  data-enrichment/          # Scripts to enrich customer data with geocoding
-    enrich_stores.py
-    enrich_stores.ipynb
-    requirements.txt
-  .env                      # Local environment variables (never commit this)
-```
+**Börja här:** [Teknisk överlämning och kvarvarande legacy](docs/HANDOVER.md).
 
-## Prerequisites
+## Aktiv kod
 
-- Python 3.10+
-- A Google Cloud service account with access to the target Google Sheet
-- A Google Maps API key
+| Del | Primära filer |
+| --- | --- |
+| Flask, autentisering, kund-/kontakt-/kalender-API | `web-app/app.py` |
+| Webbläsargränssnitt | `web-app/index.html` |
+| Kundprioritering, V3.5 | `web-app/priority.py`, `web-app/value_prioritization.py` |
+| Kund- och uppföljningstillstånd | `web-app/customer_obligations.py` |
+| Förslag och händelseloggar | `web-app/planning_suggestions.py`, `web-app/sales_coaching.py` |
+| Rutter | `web-app/route_proposal.py`, `web-app/route_optimization.py` |
+| Order och kundmaster | `stockfiller_orders/sync.py`, `customer_master_sync/sync.py` |
+| Integrationer som fortfarande finns kvar | `web-app/instagram_feed.py`, `web-app/meta_ads.py`, `storepoint_sync/sync.py` |
 
-## Environment Variables
+Se [överlämningsguiden](docs/HANDOVER.md) innan du raderar äldre fält,
+API:er, ruttfunktioner eller databasblad. Vissa är fortfarande aktiva även om
+deras namn innehåller `legacy`.
 
-Create a `.env` file in the project root with the following variables:
+## Kontrollera koden utan Render eller produktionsdata
 
-```
-SHEET_KEY=<your Google Sheet ID>
-GOOGLE_MAPS_API_KEY=<your Google Maps API key>
-GOOGLE_CREDENTIALS=<service account JSON as a single-line string>
-```
+GitHub Actions kör en syntetisk testsuite för pull requests via
+`.github/workflows/sales-coaching.yml`. Testerna använder isolerade fixtures
+och behöver ingen ny Render-tjänst.
 
-To get the `GOOGLE_CREDENTIALS` value, open your service account JSON file and paste the entire contents as a single line.
-
----
-
-## Web App
-
-### Local setup
+Rekommenderad lokal kontroll, från repositoryts rot:
 
 ```bash
-cd web-app
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # macOS/Linux
-pip install -r requirements.txt
+python -m pip install -r requirements-test.txt
+python -m unittest discover -s web-app/tests -p 'test_*.py'
+python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-### Run locally
+GitHub Actions kör dessutom frontendkontrakt och Chromium-smoketester.
+För enbart källkodsgranskning behövs inga kunduppgifter eller Google-nycklar.
 
-```bash
-python app.py
-```
+## Om någon senare vill köra applikationen
 
-The app will be available at `http://localhost:5000`.
+Studera `.env.example` och de aktiva skriv-/behörighetsspärrarna först.
+Använd **aldrig** originalets databas eller tjänster som testmiljö. Hantera
+`GOOGLE_CREDENTIALS`, API-nycklar och sessionshemligheter som hemligheter.
+Skicka inte credentials till repositoryt, issues eller PR-kommentarer.
 
-### Deploy to Render
+Befintlig driftkonfiguration finns i `render.yaml`, men att kopiera eller
+aktivera den ingår **inte** i denna överlämning. Konfigurationen innehåller
+fortfarande Polarbär-specifika värden.
 
-1. Create a new **Web Service** in Render
-2. Set the root directory to `web-app/`
-3. Set the build command to `pip install -r requirements.txt`
-4. Set the start command to `python app.py`
-5. Add the environment variables (`SHEET_KEY`, `GOOGLE_CREDENTIALS`) under **Environment**
+## Dokumentation
 
----
+- [Överlämning och kvarvarande legacy](docs/HANDOVER.md) — **läs först**.
+- [Borttagning av automatiska mejl](docs/email-integration-removal.md).
+- [Aktuell prioriteringsmodell V3.5](docs/value-contact-priority-v35.md).
+- [Kundaktivitet och säker planering](docs/customer-activity-loop.md).
+- [Synkronisering av kundmaster](docs/customer-master-sync.md).
 
-## Customer Data Flow
-
-`order_rows` is the order source used to reconcile customer identity and names into `customers_enriched`. The `customers_enriched` worksheet is the active CRM customer master used by Store Tracker and related sync jobs.
-
-Legacy worksheets named `customers` and `customer_enriched` are retired and must not be recreated or used by new code.
-
-## Data Enrichment
-
-Geocoding runs directly against rows in `customers_enriched`. `data-enrichment/enrich_stores.py` reads the customer master, enriches rows that are not already marked as enriched, and writes the geocoded address and coordinate fields back to the same worksheet.
-
-The enrichment flow does not depend on the retired `customers` or `customer_enriched` worksheets.
-
-### Setup
-
-```bash
-cd data-enrichment
-pip install -r requirements.txt
-```
-
-### Run the production enrichment script
-
-```bash
-python enrich_stores.py
-```
-
-### Inspect customer enrichment data in the notebook
-
-Open `enrich_stores.ipynb` in Jupyter or VS Code and run the cells in order. The notebook is intentionally read-only and only inspects `customers_enriched`; production writes should be performed by `enrich_stores.py`. It requires the same `.env` file in the project root.
-
-## Store Tracker Sales: no automatic email integration
-
-Automatic email proposals, Brevo and engagement tracking have been removed.
-Manual email contacts, addresses and mailto links remain. See
-[removal scope and database migration](docs/email-integration-removal.md).
+Äldre QA-rapporter, tidigare modellversioner och historiska releaseinstruktioner
+finns kvar för spårbarhet. De ska inte betraktas som uppdaterade
+installations-/driftsinstruktioner.

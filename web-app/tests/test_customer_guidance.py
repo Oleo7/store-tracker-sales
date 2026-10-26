@@ -9,7 +9,6 @@ sys.path.insert(0, str(WEB_APP_DIR))
 
 import app as app_module  # noqa: E402
 from priority import (  # noqa: E402
-    apply_workflow_suppressions,
     build_contact_features,
     build_order_features,
     build_priority_customers,
@@ -262,7 +261,7 @@ class CustomerGuidanceTests(TestCase):
         self.assertEqual(today_guidance["status_key"], "wait")
         self.assertEqual(tomorrow_guidance["status_key"], "overdue_followup")
 
-    def test_workflow_snooze_never_hides_real_overdue_followup(self):
+    def test_real_overdue_followup_comes_from_calendar(self):
         missed = {
             "planned_activity_id": "missed",
             "customer_id": "store-1",
@@ -272,21 +271,15 @@ class CustomerGuidanceTests(TestCase):
             "status": "planned",
         }
         base = scored(customers=[customer(segment="A")], planned=[missed])[0]
-        updated = apply_workflow_suppressions(
-            [base], {"store-1": "snoozed"}
-        )[0]
         self.assertEqual(
-            updated["customer_guidance"]["status_key"], "overdue_followup"
+            base["customer_guidance"]["status_key"], "overdue_followup"
         )
-        self.assertTrue(updated["customer_guidance"]["can_contact_now"])
+        self.assertTrue(base["customer_guidance"]["can_contact_now"])
 
-    def test_stored_suggestion_state_cannot_fake_or_hide_planning_status(self):
+    def test_planning_status_comes_from_calendar(self):
         base = scored(customers=[customer(segment="A")])[0]
-        stale_planned = apply_workflow_suppressions(
-            [base], {"store-1": "suggestion_planned"}
-        )[0]
         self.assertEqual(
-            stale_planned["customer_guidance"]["status_key"], "act_now"
+            base["customer_guidance"]["status_key"], "act_now"
         )
 
         future = {
@@ -300,14 +293,11 @@ class CustomerGuidanceTests(TestCase):
         really_planned = scored(
             customers=[customer(segment="A")], planned=[future]
         )[0]
-        after_snooze_overlay = apply_workflow_suppressions(
-            [really_planned], {"store-1": "snoozed"}
-        )[0]
         self.assertEqual(
-            after_snooze_overlay["customer_guidance"]["status_key"], "planned"
+            really_planned["customer_guidance"]["status_key"], "planned"
         )
         self.assertEqual(
-            after_snooze_overlay["customer_guidance"]["planned_activity_id"],
+            really_planned["customer_guidance"]["planned_activity_id"],
             "future",
         )
 
@@ -334,11 +324,6 @@ class CustomerGuidanceTests(TestCase):
                     "status": status,
                 }])
                 self.assertNotEqual(item["status_key"], "planned")
-
-    def test_workflow_pause_changes_guidance_without_changing_score(self):
-        base=scored(customers=[customer(segment='A')])[0]
-        for reason in ['snoozed','dismissed']:
-            self.assertEqual(apply_workflow_suppressions([base],{'store-1':reason})[0],base)
 
     def test_contract_is_complete_and_planning_does_not_change_score(self):
         future = {
