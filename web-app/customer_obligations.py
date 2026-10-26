@@ -228,7 +228,7 @@ def build_customer_state(customers, contact_rows, planned_activity_rows, state_e
             if same_occurrence and payload.get("status") in {"resolved", "cancelled", "skipped"} and item["status"] in OPEN_STATUSES:
                 item.update(status=payload["status"], resolution_basis="calendar_administrative_closure",
                             resolution_event_id=text(event.get("event_id")))
-virtual reschedule        grouped[cid].append(item)
+        grouped[cid].append(item)
         return item
 
     for row in plans:
@@ -247,7 +247,7 @@ virtual reschedule        grouped[cid].append(item)
             skipped = due
         if skipped and skipped.timestamp() <= current.timestamp():
             actions[cid].append((skipped, "skip", aid))
-no legacy virtual contacts    # Calendar skip events can cover only their intended missed activity.
+    # Calendar skip events can cover only their intended missed activity.
     for (kind, cid, oid), event in saved.items():
         if kind == "activity_skip" and cid in masters:
             cutoff = instant(event_payload(event).get("skipped_through_at"))
