@@ -4014,13 +4014,26 @@ def resolve_followup_source_contact_id(
     if target is None or (owner and not customer_owned_by_user(target, owner)):
         return ""
     sheet = get_worksheet(spreadsheet, "sales_activities")
-    indexed = worksheet_snapshot(sheet, expected_columns=CONTACT_COLUMNS)[1]
+    indexed = worksheet_snapshot(
+        sheet, expected_columns=CONTACT_COLUMNS, use_cache=False,
+    )[1]
+    # A source contact ID is globally unique, not merely unique per customer.
+    # Reject collisions even if only one of the duplicate rows belongs to the
+    # requested customer; otherwise the activity could acquire ambiguous
+    # cross-customer evidence.
     matches = [
         row for _index, row in indexed
         if str(row.get("contact_id") or "").strip() == requested
-        and related_row_customer(row, customers, customer_lookup=customer_lookup) is target
     ]
-    return requested if len(matches) == 1 else ""
+    if len(matches) != 1:
+        return ""
+    return (
+        requested
+        if related_row_customer(
+            matches[0], customers, customer_lookup=customer_lookup,
+        ) is target
+        else ""
+    )
 
 
 def planning_day_summaries(
