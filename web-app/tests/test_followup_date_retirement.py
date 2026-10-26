@@ -129,6 +129,67 @@ class CalendarOnlyFollowupApiTests(PlanningApiTestCase):
         self.assertEqual(calendar[0]["source_contact_id"], contacts[0]["contact_id"])
         self.assertEqual(calendar[0]["scheduled_at"], "2026-08-01T11:00+02:00")
 
+    def test_duplicate_source_id_across_customers_cannot_create_followup(self):
+        cid = "11111111-1111-4111-8111-111111111111"
+        foreign = "22222222-2222-4222-8222-222222222222"
+        self.append_contact_row(contact_id="shared-source", customer_id=cid,
+                                customer="Butik A")
+        self.append_contact_row(contact_id="shared-source", customer_id=foreign,
+                                customer="Butik B", sales_person="Sofia")
+        before_contacts = [dict(row) for row in self.contact_rows()]
+        response = self.client.post("/planning/activities", json={
+            "client_request_id": "pr5-cross-customer-source",
+            "customer_id": cid,
+            "source": "follow_up",
+            "source_contact_id": "shared-source",
+            "scheduled_at": "2026-08-01T10:00:00+02:00",
+            "contact_type": "phone",
+        })
+        self.assertEqual(response.status_code, 409, response.get_json())
+        self.assertEqual(response.get_json()["code"], "follow_up_source_not_found")
+        self.assertEqual(self.planning_rows(), [])
+        self.assertEqual(self.contact_rows(), before_contacts)
+
+    def test_foreign_source_id_cannot_be_attached_to_customer(self):
+        self.append_contact_row(
+            contact_id="foreign-only",
+            customer_id="22222222-2222-4222-8222-222222222222",
+            customer="Butik B", sales_person="Sofia",
+        )
+        response = self.client.post("/planning/activities", json={
+            "client_request_id": "pr5-foreign-source",
+            "customer_id": "11111111-1111-4111-8111-111111111111",
+            "source": "follow_up",
+            "source_contact_id": "foreign-only",
+            "scheduled_at": "2026-08-01T10:00:00+02:00",
+            "contact_type": "phone",
+        })
+        self.assertEqual(response.status_code, 409, response.get_json())
+        self.assertEqual(self.planning_rows(), [])
+
+    def test_reschedule_never_modifies_retained_legacy_sheet_date(self):
+        cid = "11111111-1111-4111-8111-111111111111"
+        self.append_contact_row(contact_id="source-calendar", customer_id=cid)
+        sheet = self.spreadsheet.worksheet("sales_activities")
+        self.assertNotIn("follow_up_date", sheet.values[0])
+        sheet.values[0].append("follow_up_date")
+        for row in sheet.values[1:]:
+            row.append("2026-07-25")
+        before = [dict(row) for row in self.contact_rows()]
+        activity = self.append_planning_row(
+            planned_activity_id="pr5-calendar-reschedule",
+            source="follow_up", source_contact_id="source-calendar",
+            scheduled_at="2026-08-01T09:00:00+02:00",
+        )
+        response = self.client.patch("/planning/activities/pr5-calendar-reschedule", json={
+            "client_request_id": "pr5-calendar-move",
+            "expected_revision": activity["revision"],
+            "scheduled_at": "2026-08-03T11:00:00+02:00",
+        })
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(self.planning_rows()[0]["scheduled_at"], "2026-08-03T11:00+02:00")
+        self.assertEqual(self.contact_rows(), before)
+
     def test_legacy_date_input_without_calendar_request_is_inert(self):
         payload = {"client_request_id": "pr5-ignored-date",
                    "date_time": "2026-07-28 09:10",
