@@ -615,7 +615,6 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
                 "sort_key": (_event_timestamp(row.get("date_time")), idx),
                 "datetime": contact_dt,
                 "row": row,
-                "follow_up_date": parse_date(row.get("follow_up_date")),
                 "customer_id": customer_id,
                 "customer_number": str(row.get("customer_number") or "").strip(),
                 "customer_key": customer_key,
@@ -653,36 +652,6 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
             if normalize_contact_result(a["row"].get("result")) == "Ej anträffbar"
             and (last_reached_sort_key is None or a["sort_key"] > last_reached_sort_key)
         ]
-        planned_followups = [
-            activity
-            for activity in human_activities
-            if activity["follow_up_date"]
-        ]
-        latest_plan = planned_followups[-1] if planned_followups else None
-        follow_up_date = latest_plan["follow_up_date"] if latest_plan else None
-
-        contact_resolved_followup = bool(
-            latest_plan
-            and any(
-                activity["sort_key"] > latest_plan["sort_key"]
-                and activity["datetime"].date() >= follow_up_date
-                for activity in activities
-            )
-        )
-        source_plan_id = (str(latest_plan["row"].get("contact_id") or "").strip()
-            or _stable_legacy_contact_id(latest_plan["sort_key"][1] + 2,
-                latest_plan.get("customer_key"), latest_plan["row"].get("date_time"))) if latest_plan else ""
-        reached_resolved_followup = bool(
-            latest_plan and (str(latest_plan["row"].get("follow_up_status") or "").casefold() in {"resolved", "cancelled"} or any(
-                a["sort_key"] > latest_plan["sort_key"]
-                and a["datetime"].date() >= follow_up_date
-                and normalize_contact_result(a["row"].get("result")) in REACHED_RESULTS
-                and source_plan_id
-                and str(a["row"].get("source_contact_id") or "") == source_plan_id
-                and bool(a["row"].get("resolves_obligation") or a["row"].get("follow_up_resolved"))
-                for a in human_activities
-            ))
-        )
         latest_identity = latest_activity
         latest_order_date = _identity_feature(
             {
@@ -695,12 +664,6 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
             number_field="customer_number",
             allow_name_after_strong_miss=False,
         ).get("last_order_date")
-        order_resolved_followup = bool(
-            follow_up_date
-            and latest_order_date
-            and latest_order_date >= follow_up_date
-        )
-
         latest_human_row = latest_human["row"] if latest_human else {}
         result = str(latest_human_row.get("result") or "").replace("\xa0", " ").strip()
         comment = str(latest_human_row.get("comment") or "").replace("\xa0", " ").strip()
@@ -739,13 +702,6 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
                 normalize_contact_result(last_reached["row"].get("result"))
                 if last_reached else ""
             ),
-            "follow_up_reached_resolved": reached_resolved_followup,
-            "latest_follow_up_created_date": (
-                latest_plan["datetime"].date() if latest_plan else None
-            ),
-            "latest_follow_up_created_datetime": latest_plan["datetime"] if latest_plan else None,
-            "latest_follow_up_event_order": latest_plan["sort_key"][1] if latest_plan else None,
-            "latest_follow_up_source_contact_id": source_plan_id,
             "latest_human_contact_id": str(
                 latest_human_row.get("contact_id") or ""
             ).strip() or (
@@ -766,8 +722,6 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
             "latest_contact_comment": comment,
             "latest_contact_person": latest_human_row.get("customer_contact_person", ""),
             "latest_freezer_fields": _freezer_fields(latest_human_row),
-            "latest_follow_up_date": follow_up_date,
-            "follow_up_resolved": contact_resolved_followup or order_resolved_followup,
             "contact_count_30d": contact_count_30d.get(identity_key, 0),
             "has_order_after_latest_contact": bool(
                 latest_order_date
@@ -1130,15 +1084,6 @@ def build_priority_customers(
         latest_reached_date = contact.get("latest_reached_date")
         days_since_reached = (today - latest_reached_date).days if latest_reached_date else None
         unanswered_count_30d = sum(1 for d in contact.get("unanswered_attempt_dates", []) if 0 <= (today - d).days <= 30)
-        latest_follow_up_date = contact.get("latest_follow_up_date")
-        follow_up_resolved = bool(contact.get("follow_up_resolved"))
-        has_unresolved_follow_up = bool(
-            latest_follow_up_date and not follow_up_resolved
-        )
-        has_current_explicit_follow_up = bool(
-            has_unresolved_follow_up
-            and latest_follow_up_date > today
-        )
         activity_state = _planned_activity_state(
             activity_index,
             customer_id=customer_id,
@@ -1263,6 +1208,18 @@ def build_priority_customers(
                 item.setdefault("created_at", source.get("occurred_at"))
                 item.setdefault("event_order", source.get("event_order"))
             obligations.append(item)
+        # Calendar-only follow-up timeline. A date on sales_activities is never
+        # interpreted as a promise or planning input in Store Tracker Sales.
+        active_calendar_obligations = [
+            item for item in (obligations or ())
+            if str(item.get("planned_activity_id") or "").strip()
+            and str(item.get("status") or "").casefold() in {"open", "scheduled", "needs_review"}
+        ]
+        active_due_dates = sorted(
+            due for item in active_calendar_obligations
+            if (due := parse_date(item.get("due_date"))) is not None
+        )
+        latest_follow_up_date = active_due_dates[0] if active_due_dates else None
         first_verified_sku_count = order.get("first_verified_order_sku_count") if "first_verified_order_sku_count" in order else first_order_sku_count or None
         final_plan = activity_state.get("future") or activity_state.get("overdue")
         decision_arguments = dict(
@@ -1272,17 +1229,11 @@ def build_priority_customers(
             latest_reached_date=latest_reached_date, latest_reached_result=latest_reached_result,
             latest_reached_at=contact.get("latest_reached_datetime"),
             latest_reached_event_order=contact.get("latest_reached_event_order"),
-            last_opt_out_date=last_opt_out_date, latest_follow_up_date=latest_follow_up_date,
-            follow_up_reached_resolved=bool(contact.get("follow_up_reached_resolved")),
+            last_opt_out_date=last_opt_out_date,
             unanswered_sequence_count=sum(1 for attempt_date in contact.get("unanswered_sequence_dates", ()) if 0 <= (today - attempt_date).days <= 30),
             last_order_date=last_order, delivery_count=business_delivery_count,
             days_since_delivery=business_days_since_delivery, overdue_days=business_overdue_days,
             expected_cycle_days=business_expected_cycle,
-            follow_up_has_later_order=bool(latest_follow_up_date and last_order and last_order >= latest_follow_up_date),
-            follow_up_created_date=contact.get("latest_follow_up_created_date"),
-            follow_up_created_at=contact.get("latest_follow_up_created_datetime"),
-            follow_up_event_order=contact.get("latest_follow_up_event_order"),
-            source_contact_id=contact.get("latest_follow_up_source_contact_id") or "",
             unverified_order_without_delivery=bool(order_count > 0 and business_delivery_count == 0),
             positive_prospect_signal=positive_prospect_signal, positive_buyer_signal=positive_buyer_signal,
             pending_unconfirmed_order_date=pending_unconfirmed_order_date,
@@ -1364,11 +1315,8 @@ def build_priority_customers(
         # Compatibility fields are descriptions, not a second decision engine.
         suppression_source_type = "planned_activity" if list_guidance.get("planned_activity_id") else ""
         suppression_source_id = list_guidance.get("planned_activity_id") or ""
-        active_obligations = [item for item in (obligations or ()) if item.get("status") not in {"resolved", "cancelled"}]
-        follow_up_due = any(parse_date(item.get("due_date")) and parse_date(item["due_date"]) <= today
-                            for item in active_obligations)
-        future_follow_up_days = ((latest_follow_up_date - today).days
-                                 if latest_follow_up_date and latest_follow_up_date > today and not follow_up_resolved else None)
+        follow_up_due = any(due <= today for due in active_due_dates)
+        future_follow_up_days = next(((due - today).days for due in active_due_dates if due > today), None)
         result.append({
             "value_model_version": VALUE_MODEL_VERSION,
             "policy_version": VALUE_POLICY_VERSION,
@@ -1474,7 +1422,7 @@ def build_priority_customers(
             "latest_freezer_fields": list(contact.get("latest_freezer_fields") or []),
             "follow_up_due": follow_up_due,
             "missad_uppfoljning": bool(
-                follow_up_due and latest_follow_up_date and latest_follow_up_date < today
+                any(due < today for due in active_due_dates)
             ),
             "has_order_after_latest_contact": has_order_after_latest_contact,
             "self_ordering_signal": bool(contact.get("self_ordering_signal")),
