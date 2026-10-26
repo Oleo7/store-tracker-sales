@@ -6241,29 +6241,32 @@ def planning_activities():
             if matched.get("status") not in OPEN_OBLIGATION_STATUSES:
                 return planning_error("obligation_closed", "Åtagandet är redan avslutat. Återuppta det först.", 409)
 
-        resolved_source_contact_id = ""
-        if source == "follow_up":
-            resolved_source_contact_id = resolve_followup_source_contact_id(
-                spreadsheet,
-                customer_name=customer.get("customer"),
-                customer_id=customer.get("customer_id"),
-                customer_number=customer.get("customer_number"),
-                source_contact_id=data.get("source_contact_id"),
-                owner=owner,
-            )
-            if not resolved_source_contact_id:
-                return planning_error(
-                    "follow_up_source_not_found",
-                    "Uppföljningen kunde inte kopplas till den ursprungliga kontakten.",
-                    409,
-                    field="source_contact_id",
-                )
-
         with planning_write_lock():
             try:
                 customer = current_customer_for_activity_write(spreadsheet, customer["customer_id"], owner=owner)
             except (CustomerStateConflict, CustomerResolutionError) as exc:
                 return planning_error(exc.code, str(exc), exc.status)
+
+            # Resolve the source after the authoritative owner refresh and
+            # under the same write lock as the calendar append. Never use
+            # an earlier cached contact identity for a new booking.
+            resolved_source_contact_id = ""
+            if source == "follow_up":
+                resolved_source_contact_id = resolve_followup_source_contact_id(
+                    spreadsheet,
+                    customer_name=customer.get("customer"),
+                    customer_id=customer.get("customer_id"),
+                    customer_number=customer.get("customer_number"),
+                    source_contact_id=data.get("source_contact_id"),
+                    owner=owner,
+                )
+                if not resolved_source_contact_id:
+                    return planning_error(
+                        "follow_up_source_not_found",
+                        "Uppföljningen kunde inte kopplas till den ursprungliga kontakten.",
+                        409,
+                        field="source_contact_id",
+                    )
 
             sheet, _headers, existing_rows = write_planned_activity_snapshot(
                 spreadsheet
