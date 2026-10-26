@@ -75,6 +75,38 @@ class CalendarOnlyModelTests(unittest.TestCase):
         self.assertEqual(item["planned_activity_id"], "calendar-one")
         self.assertEqual(item["due_date"], "2026-07-29")
 
+    def test_automated_email_cannot_complete_or_supersede_calendar_followup(self):
+        cid = "11111111-1111-4111-8111-111111111111"
+        customers = [{
+            "customer_id": cid, "customer": "Butik A",
+            "sales_person": "Olle", "customer_segment": "A", "row": 2,
+        }]
+        source = {
+            "customer_id": cid, "customer": "Butik A", "contact_id": "source",
+            "date_time": "2026-07-20T09:00:00+02:00",
+            "result": "Positiv", "contact_channel": "Telefon",
+        }
+        plan = {
+            "planned_activity_id": "followup-calendar", "customer_id": cid,
+            "customer": "Butik A", "source": "follow_up",
+            "source_contact_id": "source", "status": "planned",
+            "scheduled_at": "2026-07-25T09:00:00+02:00",
+            "created_at": "2026-07-20T10:00:00+02:00",
+            "contact_type": "phone",
+        }
+        automated = {
+            "customer_id": cid, "customer": "Butik A", "contact_id": "email",
+            "date_time": "2026-07-27T09:00:00+02:00",
+            "email_id": "system-email", "activity_source": "crm_email",
+            "result": "Positiv", "contact_channel": "Mejl",
+        }
+        now = datetime(2026, 7, 28, 12, tzinfo=ZoneInfo("Europe/Stockholm"))
+        without = build_customer_state(customers, [source], [plan], as_of=now)
+        with_email = build_customer_state(customers, [source, automated], [plan], as_of=now)
+        self.assertEqual(without["obligations"][cid][0]["status"], "scheduled")
+        self.assertEqual(with_email["obligations"][cid][0]["status"], "scheduled")
+        self.assertEqual(with_email["latest_attempts"][cid]["contact_id"], "source")
+
     def test_old_date_does_not_change_commercial_priority(self):
         cid = "11111111-1111-4111-8111-111111111111"
         customer = {"customer_id": cid, "customer": "Butik A",
