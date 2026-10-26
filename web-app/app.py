@@ -80,8 +80,8 @@ from routing_objective import priority_units, route_objective_key, ROUTE_RANKING
 from customer_obligations import (
     STATE_EVENT_COLUMNS, OPEN_STATUSES as OPEN_OBLIGATION_STATUSES,
     build_customer_state, attention_items, stable_contact_source_id,
-    obligation_id_for_activity, obligation_id_for_contact,
-    latest_state_events, event_payload, event_revision,
+    obligation_id_for_activity,
+    latest_state_events, event_payload,
 )
 from contact_channel import recommend_contact_channel
 from geocoding import geocode_address
@@ -5102,82 +5102,6 @@ def current_customer_for_activity_write(spreadsheet, customer_id, *, owner=None)
     if owner and normalize_key(current_owner.get("user_name")) != normalize_key(owner.get("user_name")):
         raise CustomerStateConflict("planning_owner_customer_mismatch", "Kunden har bytt ansvarig säljare. Ladda om kunden.", 409)
     return customer
-
-
-def customer_state_mutation_context(spreadsheet, data):
-    # Mutations validate against source rows freshly loaded inside the write
-    # lock, including edits performed directly in the spreadsheet.
-    invalidate_sheet_cache(spreadsheet, "customers_enriched", "users", "sales_activities",
-                           PLANNED_ACTIVITIES_SHEET, CUSTOMER_STATE_EVENTS_SHEET)
-    if not isinstance(data, dict) or not str(data.get("customer_id") or "").strip():
-        raise CustomerStateConflict("customer_id_required", "Ett stabilt kund-ID krävs.", 400)
-    try:
-        customer = resolve_planning_customer(spreadsheet, data)
-    except CustomerResolutionError as exc:
-        raise CustomerStateConflict(exc.code, str(exc), exc.status) from exc
-    if not (user_is_admin(current_user()) or user_is_seller(current_user())):
-        raise CustomerStateConflict("customer_state_forbidden", "Du saknar behörighet att ändra kundens planering.", 403)
-    if not customer_access_allowed(customer, current_user()):
-        raise CustomerStateConflict("customer_not_found", "Butiken kunde inte hittas.", 404)
-    owner = canonical_owner_for_customer(spreadsheet, customer)
-    if not owner:
-        raise CustomerStateConflict("planning_owner_not_found", "Kundens ansvariga säljare kunde inte verifieras.")
-    requested_owner = str(data.get("owner_user_name") or data.get("user_name") or "").strip()
-    if requested_owner and normalize_key(requested_owner) != normalize_key(owner.get("user_name")):
-        raise CustomerStateConflict("planning_owner_customer_mismatch", "Kunden har bytt ansvarig säljare. Ladda om kunden.")
-    return customer, owner
-
-
-def customer_state_event_identity(kind, customer_id, request_id):
-    request_id = normalize_client_request_id(request_id)
-    if not request_id:
-        raise CustomerStateConflict("client_request_id_required", "Request-ID saknas eller är ogiltigt.", 400)
-    return stable_planning_uuid("customer-state", current_user().get("user_name"), kind, customer_id, request_id)
-
-
-def existing_customer_state_mutation(events, *, kind, customer_id, request_id, fingerprint):
-    event_id = customer_state_event_identity(kind, customer_id, request_id)
-    matches = [row for row in events if str(row.get("event_id") or "") == event_id]
-    if len(matches) > 1:
-        raise CustomerStateConflict("duplicate_state_event", "Tillståndet har dubbla händelser och måste granskas.")
-    if matches and str(matches[0].get("fingerprint") or "") != fingerprint:
-        raise CustomerStateConflict("idempotency_payload_mismatch", "Samma request-ID har redan använts med annat innehåll.")
-    return matches[0] if matches else None
-
-
-def validate_customer_state_revision(data, current):
-    if current.get("identity_ambiguous"):
-        raise CustomerStateConflict("legacy_identity_ambiguous", "Historiska källor delar identitet. Sätt stabila kontakt-ID:n innan de ändras.", 409)
-    try:
-        expected = int(data["expected_revision"])
-    except (KeyError, ValueError, TypeError):
-        raise CustomerStateConflict("expected_revision_required", "Aktuell revision krävs. Ladda om kunden.", 400)
-    if expected != int(current.get("revision") or 0):
-        raise CustomerStateConflict("revision_conflict", "Tillståndet har ändrats. Ladda om kunden och försök igen.", current=current)
-
-
-def append_customer_state_event(spreadsheet, *, kind, entity_id, customer, owner,
-                                request_id, fingerprint, payload, revision, occurred_at=None):
-    event_id = customer_state_event_identity(kind, customer.get("customer_id"), request_id)
-    previous_revisions = [event_revision(event) for event in read_customer_state_events(spreadsheet, use_cache=False)
-                          if event.get("kind") == kind and event.get("entity_id") == entity_id
-                          and event.get("customer_id") == customer.get("customer_id")]
-    # The event sequence is independent of the public obligation CAS token.
-    revision = max(previous_revisions or [0]) + 1
-    now = parse_planning_instant(occurred_at) if occurred_at else stockholm_now()
-    now = now or stockholm_now()
-    row = {
-        "event_id": event_id, "kind": kind, "entity_id": entity_id,
-        "customer_id": customer.get("customer_id"), "owner_user_name": owner.get("user_name"),
-        "actor_user_name": current_user().get("user_name"), "revision": revision,
-        "occurred_at": now.isoformat(), "recorded_at": stockholm_now().isoformat(), "client_request_id": request_id,
-        "fingerprint": fingerprint,
-        "payload_json": json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
-    }
-    sheet = get_or_create_worksheet(spreadsheet, CUSTOMER_STATE_EVENTS_SHEET, STATE_EVENT_COLUMNS)
-    append_dict_row(sheet, STATE_EVENT_COLUMNS, row)
-    invalidate_priority_snapshot()
-    return row
 
 
 def enrich_customer_state_priorities(priorities, state, events, owner_names, *, now):
