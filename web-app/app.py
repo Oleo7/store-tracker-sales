@@ -6407,22 +6407,6 @@ def planning_activities():
                             409,
                             activity=public_planned_activity(existing),
                         )
-                    try:
-                        mirror_synced = sync_planned_followup_mirror(
-                            spreadsheet,
-                            existing,
-                        )
-                    except Exception:
-                        app.logger.exception(
-                            "Could not repair follow-up mirror on create retry"
-                        )
-                        mirror_synced = False
-                    if not mirror_synced:
-                        return planning_error(
-                            "follow_up_mirror_failed",
-                            "Aktiviteten sparades men uppföljningsdatumet kunde inte synkas. Försök igen med samma request-ID.",
-                            503,
-                        )
                     return jsonify({
                         "ok": True,
                         "duplicate": True,
@@ -6467,22 +6451,6 @@ def planning_activities():
                 app.logger.exception("Could not save planned activity")
                 return planning_error("planning_store_unavailable", "Aktiviteten kunde inte sparas. Försök igen med samma request-ID.", 503)
 
-            try:
-                mirror_synced = sync_planned_followup_mirror(
-                    spreadsheet,
-                    row_data,
-                )
-            except Exception:
-                app.logger.exception(
-                    "Activity saved but follow-up mirror failed"
-                )
-                mirror_synced = False
-            if not mirror_synced:
-                return planning_error(
-                    "follow_up_mirror_failed",
-                    "Aktiviteten sparades men uppföljningsdatumet kunde inte synkas. Försök igen med samma request-ID.",
-                    503,
-                )
         return jsonify({
             "ok": True,
             "duplicate": False,
@@ -6696,102 +6664,6 @@ def planning_activities():
         reverse=True,
     )
 
-    include_followups = str(
-        request.args.get("include_followups", "1")
-    ).strip().casefold() not in {"0", "false", "no"}
-    unscheduled_followups = []
-    try:
-        contact_rows_only = [row for _row_index, row in owner_contacts]
-        contact_features = (
-            build_contact_features(
-                contact_rows_only,
-                build_order_features(get_order_rows(spreadsheet)),
-            )
-            if include_followups else {}
-        )
-        active_followup_customer_keys = set()
-        for _row_index, row in owner_activities_all:
-            if (
-                str(row.get("source") or "").strip().casefold() != "follow_up"
-                or str(row.get("status") or "").strip().casefold()
-                not in {"planned", "completed"}
-            ):
-                continue
-            active_followup_customer_keys.update({
-                normalize_key(row.get("customer_key")),
-                normalize_key(row.get("customer")),
-            })
-        active_followup_customer_keys.discard("")
-        for customer_key, feature in contact_features.items():
-            follow_up_date = feature.get("latest_follow_up_date")
-            if (
-                not follow_up_date
-                or feature.get("follow_up_resolved")
-                or not start_date <= follow_up_date <= end_date
-                or normalize_key(customer_key) in active_followup_customer_keys
-            ):
-                continue
-            source_index = None
-            source_row = None
-            for row_index, row in owner_contacts:
-                if (
-                    normalize_key(row.get("customer")) == normalize_key(customer_key)
-                    and parse_date_value(row.get("follow_up_date")) == follow_up_date
-                ):
-                    if source_index is None or row_index > source_index:
-                        source_index, source_row = row_index, row
-            if source_row is None:
-                continue
-            customer = related_row_customer(
-                source_row,
-                planning_customers,
-                customer_lookup=planning_customer_lookup,
-            )
-            unscheduled_followups.append({
-                "customer": str(source_row.get("customer") or "").strip(),
-                "customer_key": normalize_key(customer_key),
-                "customer_row": customer.get("row") if customer else None,
-                "customer_number": (
-                    str(customer.get("customer_number") or "").strip()
-                    if customer else ""
-                ),
-                "follow_up_date": follow_up_date.isoformat(),
-                "source_contact_id": str(
-                    source_row.get("contact_id") or ""
-                ).strip(),
-                "source_contact_row": source_index,
-                "latest_contact_result": feature.get(
-                    "latest_contact_result", ""
-                ),
-                "contact_type": normalize_planning_contact_type(
-                    source_row.get("contact_channel")
-                ),
-                "note": str(
-                    feature.get("latest_contact_comment") or ""
-                ).strip(),
-            })
-    except Exception:
-        app.logger.warning(
-            "Could not build unscheduled legacy follow-ups",
-            exc_info=True,
-        )
-
-    unscheduled_followups_overdue, unscheduled_followups_upcoming = (
-        build_unscheduled_followup_groups(
-            indexed_contacts=owner_contacts,
-            activities=[row for _row_index, row in owner_activities_all],
-            customers=planning_customers,
-            selected_start=start_date,
-            selected_end=end_date,
-            today=stockholm_today(),
-            state_events=read_customer_state_events(spreadsheet),
-            prepared_state=activity_state, owner_user_name=owner.get("user_name"),
-        ) if include_followups else ([], [])
-    )
-    unscheduled_followups = (
-        unscheduled_followups_overdue + unscheduled_followups_upcoming
-    )
-
     summaries = planning_day_summaries(
         start_date,
         end_date,
@@ -6844,15 +6716,6 @@ def planning_activities():
         "days": {item["date"]: item for item in summaries},
         "available_users": available_users,
         "unplanned_contacts": unplanned_contacts,
-        "unscheduled_followups_overdue": unscheduled_followups_overdue,
-        "unscheduled_followups_upcoming": unscheduled_followups_upcoming,
-        "unscheduled_followups": sorted(
-            unscheduled_followups,
-            key=lambda item: (
-                item.get("follow_up_date") or "",
-                item.get("customer") or "",
-            ),
-        ),
     }
     record_performance_step(
         "calculation.planning",
@@ -7056,22 +6919,6 @@ def update_planning_activity(activity_id):
                     "Samma request-ID har redan använts med ett annat innehåll.",
                     409,
                     activity=public_planned_activity(current),
-                )
-            try:
-                mirror_synced = sync_planned_followup_mirror(
-                    spreadsheet,
-                    current,
-                )
-            except Exception:
-                app.logger.exception(
-                    "Could not repair follow-up mirror on update retry"
-                )
-                mirror_synced = False
-            if not mirror_synced:
-                return planning_error(
-                    "follow_up_mirror_failed",
-                    "Aktiviteten är uppdaterad men uppföljningsdatumet kunde inte synkas. Försök igen med samma request-ID.",
-                    503,
                 )
             try:
                 sync_suggestion_from_activity(
@@ -7298,22 +7145,6 @@ def update_planning_activity(activity_id):
         )
         update_sheet_row(sheet, row_index, headers, updates)
         updated = {**current, **updates}
-        try:
-            mirror_synced = sync_planned_followup_mirror(
-                spreadsheet,
-                updated,
-            )
-        except Exception:
-            app.logger.exception(
-                "Activity updated but follow-up mirror failed"
-            )
-            mirror_synced = False
-        if not mirror_synced:
-            return planning_error(
-                "follow_up_mirror_failed",
-                "Aktiviteten är uppdaterad men uppföljningsdatumet kunde inte synkas. Försök igen med samma request-ID.",
-                503,
-            )
         try:
             sync_suggestion_from_activity(
                 spreadsheet,
