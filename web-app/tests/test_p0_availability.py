@@ -881,5 +881,3 @@ class ConcurrentEndpointAvailabilityTests(PlanningApiTestCase):
                 {item["customer_id"] for item in sofia_candidates}
             )
         )
-
-
