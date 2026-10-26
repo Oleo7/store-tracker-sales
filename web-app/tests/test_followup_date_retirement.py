@@ -5,6 +5,7 @@ whether historical rows remain in the copied Google Sheet.
 """
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -201,6 +202,38 @@ class CalendarOnlyFollowupApiTests(PlanningApiTestCase):
         self.assertEqual(response.get_json()["code"], "follow_up_source_not_found")
         self.assertEqual(self.planning_rows(), [])
         self.assertEqual(self.contact_rows(), before_contacts)
+
+    def test_source_collision_discovered_during_write_prevents_booking(self):
+        cid = "11111111-1111-4111-8111-111111111111"
+        self.append_contact_row(
+            contact_id="racing-source", customer_id=cid, customer="Butik A",
+        )
+        original = application.current_customer_for_activity_write
+
+        def inject_duplicate(spreadsheet, *args, **kwargs):
+            customer = original(spreadsheet, *args, **kwargs)
+            self.append_contact_row(
+                contact_id="racing-source",
+                customer_id="22222222-2222-4222-8222-222222222222",
+                customer="Butik B", sales_person="Sofia",
+            )
+            return customer
+
+        with patch.object(
+            application, "current_customer_for_activity_write",
+            side_effect=inject_duplicate,
+        ):
+            response = self.client.post("/planning/activities", json={
+                "client_request_id": "pr5-racing-source",
+                "customer_id": cid,
+                "source": "follow_up",
+                "source_contact_id": "racing-source",
+                "scheduled_at": "2026-08-01T10:00:00+02:00",
+                "contact_type": "phone",
+            })
+        self.assertEqual(response.status_code, 409, response.get_json())
+        self.assertEqual(response.get_json()["code"], "follow_up_source_not_found")
+        self.assertEqual(self.planning_rows(), [])
 
     def test_foreign_source_id_cannot_be_attached_to_customer(self):
         self.append_contact_row(
