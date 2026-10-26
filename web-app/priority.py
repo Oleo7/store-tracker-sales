@@ -652,6 +652,19 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
             if normalize_contact_result(a["row"].get("result")) == "Ej anträffbar"
             and (last_reached_sort_key is None or a["sort_key"] > last_reached_sort_key)
         ]
+        # Order evidence remains independent of the retired contact-log follow-up date.
+        latest_identity = latest_activity
+        latest_order_date = _identity_feature(
+            {
+                "customer_id": latest_identity.get("customer_id"),
+                "customer_number": latest_identity.get("customer_number"),
+                "customer": latest_identity.get("customer_key"),
+            },
+            order_indices,
+            name_field="customer",
+            number_field="customer_number",
+            allow_name_after_strong_miss=False,
+        ).get("last_order_date")
         latest_human_row = latest_human["row"] if latest_human else {}
         result = str(latest_human_row.get("result") or "").replace("\xa0", " ").strip()
         comment = str(latest_human_row.get("comment") or "").replace("\xa0", " ").strip()

@@ -647,13 +647,6 @@ def store_contact_guidance(
     if explicit and selected.get("_due") and selected["_due"] < today:
         return choose("overdue_followup", "Planera om aktiviteten", _decision_plan_reason(plan_row, scheduled, overdue=True),
                       code="overdue_planned_activity", key="reschedule_followup")
-    future_reminders = sorted(day for item in internal_reminders
-                              if (day := _decision_day(item.get("due_date"))) and day > today)
-    if future_reminders:
-        return choose("wait", "Invänta kundens beställning" if self_ordering_signal else "Avvakta till uppföljningsdatum",
-                      "Kunden avser beställa själv; senare uppföljning finns" if self_ordering_signal else "Ett senare internt uppföljningsdatum finns; ingen kalenderbokning",
-                      code="self_ordering_wait" if self_ordering_signal else "internal_followup_wait", until=future_reminders[0])
-
     reached_by_purpose = reached_by_purpose or {}
     current_purpose = "first_order_onboarding" if delivery_count == 1 and days_since_delivery is not None and 7 <= days_since_delivery <= 10 else "second_purchase_due"
     purpose_aliases = {"first_order_onboarding": ("first_order_onboarding", "onboarding", "check_placement"),
@@ -672,16 +665,6 @@ def store_contact_guidance(
         gap_contact = max((d for d in (purpose_contact, recent_after_delivery) if d), default=None)
         if gap_contact and 0 <= (today - gap_contact).days < int(policy["same_purpose_dialogue_gap_days"]):
             return choose("wait", "Avvakta kort kontaktpaus", "Nylig dialog efter första leveransen", code="recent_same_purpose_dialogue_wait", until=gap_contact + timedelta(days=int(policy["same_purpose_dialogue_gap_days"])))
-    due_reminders = [item for item in internal_reminders
-                     if (due := _decision_day(item.get("due_date"))) is not None
-                     and 0 <= (today - due).days < int(policy["stale_followup_review_days"])]
-    # A seller-selected date remains useful without pretending the customer
-    # promised anything. It may override routine spacing, never a negative,
-    # order, retry, booking or very recent reached-contact restriction.
-    if due_reminders and not retry_needed and (age is None or age >= int(policy["same_purpose_dialogue_gap_days"])):
-        return choose("act_now", "Stäm av kundens egen beställning" if self_ordering_signal else "Följ upp enligt valt datum",
-                      "Internt uppföljningsdatum har kommit; ingen senare aktivitet har ersatt det",
-                      code="self_ordering_followup_due" if self_ordering_signal else "internal_followup_due", key="follow_up_customer")
     if retry_needed and positive_window:
         return choose("act_now", "Kontrollera kontaktväg" if unanswered_sequence_count >= 3 else "Försök nå kunden igen",
             "Positiv dialog kvarstår efter ett obesvarat försök; ingen senare order",
