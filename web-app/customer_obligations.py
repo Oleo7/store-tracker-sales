@@ -91,8 +91,9 @@ def confirmed(value):
 
 
 def obligation_id_for_activity(row):
-    """Calendar activity is the operational follow-up identity."""
-    return text(row.get("obligation_id")) or "calendar:" + text(row.get("planned_activity_id"))
+    """Expose a single calendar-scoped ID, even for rows with legacy scopes."""
+    activity_id = text(row.get("planned_activity_id"))
+    return "calendar:" + activity_id if activity_id else ""
 
 
 def _rows(rows):
