@@ -72,20 +72,16 @@ smoke-testas med minst en användare per roll före release.
 
 ## 4. Dry-run och migrering
 
-### Engångsreconciliation för `superseded`
+### Tidigare `superseded`-reconciliation (avvecklad)
 
-Efter verifierad backup och driftsättning av kod som känner igen `superseded`,
-kör `scripts/reconcile_superseded_activities.py` med samma miljöfil som pekar
-på önskat CRM-ark. Standardläget är skrivskyddat och visar endast kandidat-ID:n.
-Granska dessa innan `--apply` körs med `--confirm-sheet-key` satt till det
-konfigurerade arkets ID. Skriptet ändrar endast `planned`-rader med ett
-kund-ID och en senare mänsklig kontakt. En ny dry-run efteråt ska visa noll
-kandidater. Körningen kan upprepas utan fler ändringar.
+Det tidigare engångsskriptet `scripts/reconcile_superseded_activities.py` har
+avvecklats. I den aktuella koden returnerade både kandidatinsamlingen och
+reconciliation-funktionen alltid tomma listor. Skriptet kunde därför inte
+migrera någon data, trots att äldre anvisningar beskrev en skrivbar körning.
 
-```powershell
-python scripts/reconcile_superseded_activities.py --env-file <path-to-env>
-python scripts/reconcile_superseded_activities.py --env-file <path-to-env> --apply --confirm-sheet-key <selected-sheet-id>
-```
+`superseded` hanteras numera i den aktiva kundaktivitetsprojektionen och
+planeringsflödet. Kör ingen historisk reconciliation för detta. Befintliga
+planeringsrader och `planned_activities`-kolumner ska bevaras.
 
 Kör från repository-roten med produktionsmiljön laddad. UUID:t i apply ska
 vara exakt det som granskades i dry-run:

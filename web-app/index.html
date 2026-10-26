@@ -5283,20 +5283,6 @@
     };
   }
 
-  function getRouteProposalCustomers(baseCustomers, proposal = routeProposal) {
-    if (!proposal) return baseCustomers;
-    const byRow = new Map(baseCustomers.map(customer => [Number(customer.row), customer]));
-    return proposal.stops.map(stop => {
-      const customer = byRow.get(Number(stop.row));
-      return {
-        ...customer,
-        latitude: stop.latitude,
-        longitude: stop.longitude,
-        routeProposalStop: stop,
-      };
-    });
-  }
-
   function getRouteProposalStop(customer) {
     if (customer?.routeProposalStop) return customer.routeProposalStop;
     if (!routeProposal) return null;
@@ -5480,26 +5466,6 @@
     const selectedRows = routeInMapStops.map(stop => Number(stop.row));
     return proposalRows.length !== selectedRows.length ||
       proposalRows.some((row, index) => row !== selectedRows[index]);
-  }
-
-  function invalidateRouteProposalIfNeeded(currentSignature) {
-    const proposalIsStale = routeProposal && routeProposal.signature !== currentSignature;
-    const requestIsStale = routeProposalLoading
-      && routeProposalRequestSignature
-      && routeProposalRequestSignature !== currentSignature;
-    if (!proposalIsStale && !requestIsStale) return false;
-
-    cancelRouteProposalRequest();
-    routeProposal = null;
-    resetRouteProposalMapSelection();
-    routeProposalMessage = {
-      title: "Ruttförslaget togs bort",
-      text: "Filtren ändrades. Skapa ett nytt ruttförslag.",
-      canRetry: true,
-    };
-    leaveInvalidatedRouteMap();
-    renderRouteProposalPanel();
-    return true;
   }
 
   function clearRouteProposal({ announce = false } = {}) {
