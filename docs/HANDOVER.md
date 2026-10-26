@@ -127,6 +127,28 @@ guide.**
    datakolumnen i befintlig kopia kan ligga kvar som historiskt rådata tills
    en separat, verifierad databasmigrering har godkänts; kodmodellen kräver
    inte kolumnen. Originalets Store Tracker påverkas inte.
+
+   **PR5:s operativa kontrakt och säkerhetsgränser:**
+   - En uppföljning är en faktisk rad i `planned_activities` med ett
+     `planned_activity_id`. Missade aktiviteter, ombokning och Hoppa över
+     använder samma kalenderobjekt. `/customer-obligations/action` returnerar
+     HTTP 410 och skapar inga nya kalender- eller händelserader.
+   - `source_contact_id` kan kopplas till en ny uppföljning endast om det
+     finns exakt en motsvarande kontakt globalt, kunden stämmer och användaren
+     har behörighet. Kontroll och kalenderappend sker under skrivlås.
+   - En kontakt sparas utan datum-mirror. Om kontakten även begär en
+     uppföljning måste kalenderappend lyckas; ett delvis lyckat resultat
+     rapporteras för idempotent retry med samma request-ID.
+   - Historiska datum i den kopierade `sales_activities.follow_up_date`
+     får ligga kvar som rådata men producerar **inte** längre åtgärder.
+     Före framtida driftsättning på en redan använd databas måste ägaren
+     separat inventera äldre datum utan kalenderaktivitet och besluta om
+     eventuella manuella/migrerade uppföljningar. Att mergea PR5 är **inte**
+     samma sak som att godkänna datamigrering eller driftsättning.
+   - PR5:s regressionsgrind omfattar hela Python-/frontend-testsviten samt
+     webbläsartester för dator och mobil, kalenderdrag, prioritering,
+     säljarflöden, ruttplanering och missade kalenderaktiviteter.
+     Inga produktions-Sheets- eller Render-skrivningar ingår.
 4. Ta ställning till produktens omfattning: vilka Polarbär-specifika analyser,
    produktfält och integrationer ska bli valbara eller tas bort?
 5. Dela senare `app.py` och `index.html` i mindre moduler **utan att samtidigt**
