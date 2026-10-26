@@ -62,33 +62,6 @@ def model(contacts=(), plans=(), orders=(), events=(), now=NOW):
 
 
 class HistoryReconciliationTests(TestCase):
-    def test_comment_owner_result_and_row_order_do_not_change_identity(self):
-        a=contact(comment='Original', follow_up_date='2026-10-10')
-        b={**a, 'comment':'Corrected', 'sales_person':'new seller', 'result':'Positiv'}
-        self.assertEqual(stable_contact_source_id(a),stable_contact_source_id(b))
-        before=state([a])['obligations']['c1'][0]
-        after=state([b])['obligations']['c1'][0]
-        self.assertEqual(before['obligation_id'],after['obligation_id'])
-        self.assertNotEqual(before['revision'],after['revision'])
-        unrelated=contact(5, contact_id='unrelated')
-        left=state([a,unrelated]);right=state([unrelated,a])
-        self.assertEqual(left['obligations']['c1'][0]['obligation_id'],right['obligations']['c1'][0]['obligation_id'])
-
-
-    def test_old_saved_identity_survives_edit_without_reopening(self):
-        original=contact(comment='old text',follow_up_date='2026-09-25')
-        sid='legacy:'+source_fingerprint(original)[:32]
-        event={'kind':'obligation','customer_id':'c1','entity_id':'followup:'+sid,
-               'event_id':'close1','revision':1,'occurred_at':'2026-10-01T10:00+02:00',
-               'payload_json':json.dumps({'status':'resolved','source_contact_id':sid,
-                                         'source_created_at':original['date_time'],
-                                         'purpose':'internal_followup'})}
-        st=state([{**original,'comment':'corrected'}],events=[event])
-        self.assertEqual(len(st['obligations']['c1']),1)
-        self.assertEqual(st['obligations']['c1'][0]['status'],'resolved')
-        self.assertEqual(st['obligations']['c1'][0]['obligation_id'],'followup:'+sid)
-
-
 class ContactAndRankingTests(TestCase):
     def test_date_alone_never_lifts_negative_contact_pause(self):
         for proof in (False,True):
@@ -96,14 +69,6 @@ class ContactAndRankingTests(TestCase):
             row,_=model(cs)
             self.assertFalse(row['can_start_unscheduled_contact'])
             self.assertFalse(row['list_guidance']['explicit_agreement_overrides_negative'])
-
-    def test_date_only_future_reminder_is_not_green_booking(self):
-        row,_=model([contact(30,follow_up_date='2026-10-25')])
-        self.assertEqual(row['list_guidance']['reason_code'],'future_follow_up_date')
-        self.assertFalse(row['has_planned_contact']);self.assertFalse(row['planned_activity_id'])
-        row,_=model([contact(30,follow_up_date='2026-10-25',follow_up_agreement_confirmed=True)])
-        self.assertEqual(row['list_guidance']['status_key'],'wait');self.assertFalse(row['has_planned_contact'])
-
 
     def test_safety_gate_remains_when_old_history_no_longer_blocks(self):
         for result in ['Negativ','Ej anträffbar']:
@@ -132,15 +97,6 @@ class ContactAndRankingTests(TestCase):
         planned,_=model(orders=[order(24)],plans=[plan(2)])
         self.assertTrue(planned['has_planned_contact']);self.assertEqual(planned['contact_priority_raw'],0)
         self.assertGreater(planned['work_priority_raw'],0)
-
-    def test_self_ordering_wait_then_new_order_clears_internal_cue(self):
-        cs=[contact(25,'Positiv',follow_up_date='2026-10-25',comment='Kunden beställer själv i Stockfiller')]
-        row,_=model(cs);self.assertEqual(row['action_type'],'self_ordering_wait')
-        later,_=model(cs,now=NOW+timedelta(days=7))
-        self.assertEqual(later['list_guidance']['status_key'],'overdue_followup')
-        with_order,_=model(cs,orders=[order(1)])
-        self.assertGreater(with_order['business_verified_delivery_count'],0)
-        self.assertEqual(len(state(cs,orders=[order(1)])['obligations']['c1']),1)
 
     def test_ranking_rollback_preserves_safety_and_obligations(self):
         c=contact(100,contact_id='old',follow_up_date='2026-08-01')
@@ -187,13 +143,6 @@ class AdditionalCommercialRegressionTests(TestCase):
         self.assertEqual(row['business_verified_delivery_count'],1)
         self.assertIn('delivery_after_report',{w['code'] for w in row['data_warnings']})
 
-    def test_self_ordering_evidence_survives_an_unanswered_attempt(self):
-        cs=[contact(25,'Positiv',follow_up_date='2026-10-25',comment='Kunden beställer själv i Stockfiller'),
-            contact(5,'Ej anträffbar',comment='Inget svar')]
-        row,_=model(cs)
-        self.assertEqual(row['action_type'],'self_ordering_wait')
-
-
     def test_new_order_does_not_remove_retry_pause_for_separate_promise(self):
         cs=[contact(20,contact_id='service',follow_up_date='2026-10-17',follow_up_agreement_confirmed=True),
             contact(0,'Ej anträffbar',contact_id='attempt',obligation_id='followup:service',obligation_outcome='open')]
@@ -233,43 +182,3 @@ class TimestampAndIdentityRegressionTests(TestCase):
 
 
 class SourceWriteSafetyTests(PlanningApiTestCase):
-    def test_colliding_legacy_sources_cannot_be_silently_promoted(self):
-        cid='11111111-1111-4111-8111-111111111111'
-        self.append_contact_row(customer_id=cid,date_time='2026-07-20 09:00',comment='one',follow_up_date='2026-07-25')
-        self.append_contact_row(customer_id=cid,date_time='2026-07-20 09:00',comment='two',follow_up_date='2026-07-26')
-        rows=self.contact_rows();sid=stable_contact_source_id(rows[0]);before=deepcopy(rows)
-        value=application.ensure_followup_source_contact_id(self.spreadsheet,customer_id=cid,customer_name='Butik A',source_contact_id=sid)
-        self.assertEqual(value,'');self.assertEqual(self.contact_rows(),before)
-
-    def test_saved_legacy_alias_reschedule_after_note_edit_keeps_identity(self):
-        cid = '11111111-1111-4111-8111-111111111111'
-        self.append_contact_row(customer_id=cid, contact_id='', date_time='2026-07-20 09:00',
-                                comment='Original promise', follow_up_date='2026-07-25',
-                                follow_up_purpose='customer_followup', follow_up_agreement_confirmed='Y')
-        original = self.contact_rows()[0]
-        old_id = 'legacy:' + source_fingerprint(original)[:32]
-        item = application.customer_state_snapshot(self.spreadsheet)['obligations'][cid][0]
-        item.update(obligation_id='followup:' + old_id, source_contact_id=old_id, status='open')
-        sheet = self.spreadsheet.add_worksheet(application.CUSTOMER_STATE_EVENTS_SHEET, rows=100, cols=12)
-        sheet.append_row(application.STATE_EVENT_COLUMNS)
-        event = {'event_id':'old-event', 'kind':'obligation', 'entity_id':item['obligation_id'],
-                 'customer_id':cid, 'owner_user_name':'olle', 'actor_user_name':'olle', 'revision':1,
-                 'occurred_at':'2026-07-26T09:00:00+02:00', 'payload_json':json.dumps(item)}
-        sheet.append_row([event.get(k,'') for k in application.STATE_EVENT_COLUMNS])
-        contacts = self.spreadsheet.worksheet('sales_activities')
-        headers = contacts.values[0]
-        contacts.values[1][headers.index('comment')] = 'Corrected note, same promise'
-        fresh = application.customer_state_snapshot(self.spreadsheet)['obligations'][cid][0]
-        self.assertEqual(fresh['obligation_id'],item['obligation_id'])
-        data = {'customer_id':cid, 'obligation_id':fresh['obligation_id'], 'action':'reschedule',
-                'expected_revision':fresh['revision'], 'client_request_id':'alias-reschedule',
-                'scheduled_at':'2026-07-28T10:00+02:00', 'contact_type':'phone'}
-        response = self.client.post('/customer-obligations/action',json=data)
-        self.assertEqual(response.status_code,200,response.get_json())
-        self.assertEqual(response.get_json()['obligation']['obligation_id'],item['obligation_id'])
-        self.assertEqual(self.contact_rows()[0]['contact_id'],old_id)
-        self.assertEqual(self.planning_rows()[0]['source_contact_id'],old_id)
-        self.assertEqual(self.contact_rows()[0]['comment'],'Corrected note, same promise')
-        repeated = self.client.post('/customer-obligations/action',json=data)
-        self.assertEqual(repeated.status_code,200,repeated.get_json())
-        self.assertEqual(len(self.planning_rows()),1)

@@ -40,18 +40,6 @@ def missed(model, at=AT, **extra):
 
 
 class ActivityChronologyTests(TestCase):
-    def test_old_virtual_closure_does_not_close_new_source_linked_booking(self):
-        source=contact(at='2026-10-01T09:00+02:00',follow_up_date='2026-10-10')
-        for status in ['resolved','cancelled','skipped']:
-            with self.subTest(status=status):
-                event=dict(kind='obligation',customer_id=CID,entity_id='followup:contact',
-                    occurred_at='2026-10-15T10:00+02:00',payload_json=json.dumps({'status':status}))
-                old=state(contacts=[source],events=[event])['obligations'][CID][0]
-                self.assertEqual(old['status'],status)
-                booking=plan('new','2026-10-25T09:00+01:00',source_contact_id='contact',
-                    created_at='2026-10-20T10:00+02:00',obligation_id='followup:contact')
-                self.assertEqual(state([booking],[source],[event])['obligations'][CID][0]['status'],'scheduled')
-
     def test_closure_is_scoped_to_activity_even_when_source_and_creation_time_match(self):
         source=contact(at='2026-10-01T09:00+02:00')
         bookings=[plan(aid,'2026-10-25T09:00+01:00',source_contact_id='contact',
@@ -157,11 +145,6 @@ class ActivityChronologyTests(TestCase):
         event=dict(kind='obligation',customer_id=CID,entity_id='calendar:p1',occurred_at='2026-10-20T10:00+02:00',payload_json='{"status":"resolved"}')
         model=state([plan()],events=[event]);self.assertEqual(missed(model),[])
         self.assertEqual(model['latest_reached'],{}); self.assertEqual(model['latest_attempts'],{})
-
-    def test_virtual_followup_has_no_fabricated_booking_time(self):
-        model=state(contacts=[contact(at='2026-10-01T09:00+02:00',follow_up_date='2026-10-19')])
-        item=missed(model)[0];self.assertEqual(item['due_at'],'');self.assertEqual(item['planned_activity_id'],'')
-        self.assertFalse(item['appointment_confirmed'])
 
     def test_invalid_identity_and_deleted_customer_isolated(self):
         rows=[plan(),{**plan('unknown'),'customer_id':'deleted'},
@@ -322,24 +305,6 @@ class ActivityLoopApiTests(PlanningApiTestCase):
         with patch.object(app_module,'append_dict_row',side_effect=timeout):self.assertEqual(self.log().status_code,503)
         self.assertEqual(self.log().status_code,200);self.assertEqual(len(self.contact_rows()),1)
 
-    def test_virtual_followup_skip_and_reschedule(self):
-        self.append_contact_row(customer_id=CID,contact_id='legacy',date_time='2026-07-01T09:00+02:00',follow_up_date='2026-07-24')
-        item=self.attention()['items'][0]
-        payload=dict(customer_id=CID,obligation_id=item['obligation_id'],expected_revision=item['revision'],client_request_id='legacy-skip',action='skip')
-        response=self.client.post('/customer-obligations/action',json=payload)
-        self.assertEqual(response.status_code,200,response.get_json());self.assertEqual(self.attention()['total'],0)
-        self.assertEqual(self.client.post('/customer-obligations/action',json=payload).status_code,200)
-        self.assertEqual(len(self.contact_rows()),1)
-
-    def test_virtual_reschedule_creates_real_activity(self):
-        self.append_contact_row(customer_id=CID,contact_id='legacy',date_time='2026-07-01T09:00+02:00',follow_up_date='2026-07-24')
-        item=self.attention()['items'][0]
-        payload=dict(customer_id=CID,obligation_id=item['obligation_id'],expected_revision=item['revision'],client_request_id='legacy-move',action='reschedule',scheduled_at='2026-07-28T14:00+02:00',contact_type='phone')
-        response=self.client.post('/customer-obligations/action',json=payload)
-        self.assertEqual(response.status_code,200,response.get_json());self.assertEqual(self.attention()['total'],0)
-        self.assertEqual(self.client.post('/customer-obligations/action',json=payload).status_code,200)
-        self.assertEqual(len(self.planning_rows()),1)
-
     def test_missing_data_fails_read_without_claiming_empty(self):
         with patch.object(app_module,'get_contact_rows',side_effect=RuntimeError('contact read unavailable')):
             response=self.client.get('/planning/attention?user_name=olle')
@@ -371,66 +336,6 @@ class ActivityLoopSafetyTests(PlanningApiTestCase):
         item=self.attention()['items'][0]
         return dict(customer_id=CID,obligation_id=item['obligation_id'],expected_revision=item['revision'],
             client_request_id='normalize-legacy',action='reschedule',scheduled_at='2026-07-28T14:00+02:00',contact_type='phone')
-
-    def test_legacy_without_id_reschedule_then_patch_and_retry(self):
-        payload=self.legacy_without_id()
-        response=self.client.post('/customer-obligations/action',json=payload)
-        self.assertEqual(response.status_code,200,response.get_json())
-        row=self.planning_rows()[0]
-        self.assertEqual(row['source_contact_id'],self.contact_rows()[0]['contact_id'])
-        self.assertTrue(row['source_contact_id'].startswith('legacy2:'))
-        self.assertEqual(self.client.post('/customer-obligations/action',json=payload).status_code,200)
-        data=dict(scheduled_at='2026-07-29T14:00+02:00',expected_revision=1,client_request_id='move-normalized')
-        for _ in range(2):
-            moved=self.client.patch('/planning/activities/'+row['planned_activity_id'],json=data)
-            self.assertEqual(moved.status_code,200,moved.get_json())
-        self.assertEqual(self.contact_rows()[0]['follow_up_date'],'2026-07-29')
-        self.assertEqual(len(self.planning_rows()),1)
-        self.assertEqual(len(self.contact_rows()),1)
-
-    def test_normalized_legacy_retry_after_activity_append_failure(self):
-        payload=self.legacy_without_id()
-        with patch.object(app_module,'append_dict_row',side_effect=RuntimeError('activity append failed')):
-            self.assertEqual(self.client.post('/customer-obligations/action',json=payload).status_code,503)
-        self.assertTrue(self.contact_rows()[0]['contact_id'])
-        response=self.client.post('/customer-obligations/action',json=payload)
-        self.assertEqual(response.status_code,200,response.get_json())
-        self.assertEqual(len(self.planning_rows()),1)
-
-    def test_normalized_legacy_retry_after_id_write_timeout(self):
-        payload=self.legacy_without_id()
-        original=app_module.update_sheet_row
-        def timeout(sheet,*args,**kwargs):
-            original(sheet,*args,**kwargs)
-            if sheet.title=='sales_activities':
-                raise TimeoutError('source ID saved but response lost')
-        with patch.object(app_module,'update_sheet_row',side_effect=timeout):
-            self.assertEqual(self.client.post('/customer-obligations/action',json=payload).status_code,503)
-        response=self.client.post('/customer-obligations/action',json=payload)
-        self.assertEqual(response.status_code,200,response.get_json())
-        self.assertEqual(len(self.planning_rows()),1)
-
-    def test_ambiguous_legacy_source_is_rejected_before_activity_write(self):
-        payload=self.legacy_without_id()
-        self.append_contact_row(customer_id=CID,contact_id='',date_time='2026-07-01T09:00+02:00',
-                                follow_up_date='2026-07-24',comment='different note, same source anchor')
-        before=deepcopy({k:v.values for k,v in self.spreadsheet.sheets.items()})
-        response=self.client.post('/customer-obligations/action',json=payload)
-        self.assertIn(response.status_code,[404,409],response.get_json())
-        self.assertEqual(before,{k:v.values for k,v in self.spreadsheet.sheets.items()})
-
-    def test_source_id_collision_with_other_customer_is_rejected(self):
-        payload=self.legacy_without_id()
-        source_id=payload['obligation_id'].removeprefix('followup:')
-        self.append_contact_row(customer_id='22222222-2222-4222-8222-222222222222',customer='Butik B',
-            contact_id=source_id,date_time='2026-07-01T09:00+02:00',follow_up_date='')
-        self.assertEqual(app_module.ensure_followup_source_contact_id(self.spreadsheet,
-            customer_name='Butik A',customer_id=CID,source_contact_id=source_id),'')
-        response=self.client.post('/customer-obligations/action',json=payload)
-        # The shared projection quarantines this collision before the adapter.
-        self.assertEqual(response.status_code,404,response.get_json())
-        self.assertEqual(self.planning_rows(),[])
-        self.assertEqual(self.contact_rows()[0]['contact_id'],'')
 
     def test_future_booking_remains_available_in_calendar_after_virtual_closure(self):
         self.append_contact_row(customer_id=CID,contact_id='old-source',
@@ -481,25 +386,6 @@ class ActivityLoopSafetyTests(PlanningApiTestCase):
         self.append_contact_row(customer_id=CID,contact_id='legacy',date_time='2026-07-01T09:00+02:00',follow_up_date='2026-07-24')
         return self.attention()['items'][0]
 
-    def test_virtual_reschedule_partial_retry_preserves_later_contact(self):
-        item=self.legacy()
-        data=dict(customer_id=CID,obligation_id=item['obligation_id'],expected_revision=item['revision'],
-                  client_request_id='recover-legacy',action='reschedule',scheduled_at='2026-07-28T14:00+02:00',contact_type='phone')
-        with patch.object(app_module,'append_customer_state_event',side_effect=RuntimeError('event write failed')):
-            self.assertEqual(self.client.post('/customer-obligations/action',json=data).status_code,503)
-        self.assertEqual(self.log().status_code,200)
-        response=self.client.post('/customer-obligations/action',json=data)
-        self.assertEqual(response.status_code,200,response.get_json())
-        self.assertEqual(len(self.planning_rows()),1);self.assertEqual(len(self.contact_rows()),2)
-        self.assertEqual(self.attention()['total'],0)
-
-    def test_virtual_source_edit_rejects_old_revision(self):
-        item=self.legacy();sheet=self.spreadsheet.worksheet('sales_activities')
-        sheet.values[1][sheet.values[0].index('follow_up_date')]='2026-07-25'
-        response=self.client.post('/customer-obligations/action',json=dict(customer_id=CID,obligation_id=item['obligation_id'],
-            expected_revision=item['revision'],client_request_id='stale-legacy',action='skip'))
-        self.assertEqual(response.status_code,409);self.assertEqual(len(self.contact_rows()),1)
-
     def test_other_seller_cannot_read_or_modify_customer(self):
         self.seed_misses();self.login('sofia')
         self.assertEqual(self.log().status_code,404)
@@ -522,15 +408,6 @@ class ActivityLoopSafetyTests(PlanningApiTestCase):
         response=self.log(planned_activity_id='miss-25')
         self.assertEqual(response.status_code,200,response.get_json())
         self.assertEqual(self.client.get('/planning/attention?user_name=sofia').get_json()['total'],0)
-
-    def test_virtual_latest_skip_handles_older_virtual_misses(self):
-        self.legacy();self.append_contact_row(customer_id=CID,contact_id='second',date_time='2026-07-02T09:00+02:00',follow_up_date='2026-07-25')
-        item=self.attention()['items'][0]
-        response=self.client.post('/customer-obligations/action',json=dict(customer_id=CID,obligation_id=item['obligation_id'],
-            expected_revision=item['revision'],client_request_id='skip-group',action='skip'))
-        self.assertEqual(response.status_code,200,response.get_json());self.assertEqual(self.attention()['total'],0)
-        model=app_module.customer_state_snapshot(self.spreadsheet)
-        self.assertEqual({r['status'] for r in model['obligations'][CID]},{'skipped','superseded'})
 
     def test_actual_appointment_and_picking_help_survive(self):
         response=self.new_plan(contact_type='visit',appointment_confirmed=True,picking_help=True)

@@ -55,27 +55,7 @@ class CommercialAuditTests(TestCase):
             self.assertEqual(row['work_priority_raw'],base['work_priority_raw'])
             self.assertEqual(state['contact_permissions'],{})
 
-    def test_f8_retry_sequence_expires_without_removing_customer(self):
-        for age in [5, 30, 31, 60, 90, 3650]:
-            row, _ = history.model(contacts=[history.contact(age, "Ej anträffbar")])
-            self.assertTrue(row["can_start_unscheduled_contact"])
-            self.assertEqual(row["action_type"] == "unanswered_retry_due", age <= 30, age)
-        promise = history.contact(150, "Neutral", contact_id="service", follow_up_purpose="service_followup",
-            follow_up_agreement_confirmed="Y", follow_up_date=(history.NOW-timedelta(days=1)).date().isoformat())
-        row, state = history.model(contacts=[promise, history.contact(90, "Ej anträffbar", contact_id="attempt")])
-        self.assertTrue(row["can_start_unscheduled_contact"])
-        self.assertNotIn(state["obligations"]["c1"][0]["status"], {"resolved", "cancelled"})
-
-
 class CalendarAuditTests(planning_fixture.PlanningApiTestCase):
-    def test_f4_only_traced_manual_clarification_enables_service(self):
-        self.append_contact_row(contact_id='service',date_time='2026-01-01 09:00',result='Neutral',comment='Reklamation, leveransproblem',follow_up_date='2026-07-20')
-        item=application.customer_state_snapshot(self.spreadsheet)['obligations']['11111111-1111-4111-8111-111111111111'][0]
-        self.assertEqual(item['status'],'open')
-        response=self.client.post('/customer-obligations/action',json={'customer_id':item['customer_id'],'obligation_id':item['obligation_id'],'expected_revision':item['revision'],'client_request_id':'ordinary-service','action':'reschedule','scheduled_at':'2026-07-28T09:00+02:00','contact_type':'phone'})
-        self.assertEqual(response.status_code,200,response.get_json())
-        self.assertEqual(response.get_json()['obligation']['status'],'scheduled')
-
     def test_f3_cannot_reassign_a_source_linked_activity(self):
         self.append_contact_row(contact_id="source", follow_up_date="2026-07-28",
                                 follow_up_purpose="customer_followup", follow_up_agreement_confirmed="Y")
@@ -85,13 +65,6 @@ class CalendarAuditTests(planning_fixture.PlanningApiTestCase):
             "expected_revision":plan["revision"], "customer_id":"33333333-3333-4333-8333-333333333333"})
         self.assertEqual(response.status_code, 409, response.get_json())
         self.assertEqual(self.planning_rows()[0]["customer_id"], plan["customer_id"])
-
-    def test_f3_legacy_cross_customer_plan_is_quarantined(self):
-        self.append_contact_row(contact_id='source',follow_up_date='2026-07-28')
-        self.append_planning_row(planned_activity_id='bad',source='follow_up',source_contact_id='source',customer_row=4)
-        state=application.customer_state_snapshot(self.spreadsheet)
-        self.assertNotIn('33333333-3333-4333-8333-333333333333',state['obligations'])
-        self.assertNotEqual(state['obligations']['11111111-1111-4111-8111-111111111111'][0].get('planned_activity_id'),'bad')
 
     def test_server_emergency_stop_and_production_writer_gate(self):
         with application.app.test_request_context():

@@ -182,7 +182,10 @@ run().catch(error => { console.error(error); process.exitCode = 1; });
             flags=re.DOTALL,
         )
         self.assertIsNotNone(mutation)
-        self.assertIn("await refreshWorkflowViews({ planning: true })", mutation.group(1))
+        # Attention actions now invoke the real calendar editor or status API.
+        # The calendar save/skip path performs the authoritative refresh.
+        self.assertIn('await updatePlanningActivityStatus(activity, "skipped")', mutation.group(1))
+        self.assertIn("openPlanningEditor({ customer, activity", mutation.group(1))
 
         status_update = re.search(
             r"async function updatePlanningActivityStatus\(activity, status\) \{(.*?)\n  \}",
