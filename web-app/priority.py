@@ -893,13 +893,6 @@ def _stable_legacy_contact_id(row_index, customer_key, date_time_value):
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"polarbar-planning:{identity}"))
 
 
-def _guidance_date(value, today=None):
-    """Format a known date, retaining the year when it would be ambiguous."""
-    months = ("jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec")
-    text = f"{value.day} {months[value.month - 1]}"
-    return f"{text} {value.year}" if today is None or value.year != today.year else text
-
-
 # Action labels are presentation only; primary triggers still decide priority.
 TRIGGER_ACTIONS = {
     "first_order_onboarding": ("check_placement", "Kontrollera placering och start"),
@@ -941,12 +934,6 @@ def _activity_contact_type(row):
         "mejl": "email", "email": "email",
         "besok": "visit", "besök": "visit", "visit": "visit",
     }.get(value, value or "")
-
-
-def _contact_type_label(value):
-    return {
-        "phone": "Telefon", "email": "Mejl", "visit": "Besök",
-    }.get(str(value or "").strip().casefold(), "Kontakt")
 
 
 def _focus_key(
@@ -1500,11 +1487,6 @@ def build_priority_customers(
     return result[:limit]
 
 
-def apply_workflow_suppressions(priority_customers, suppressions):
-    """Compatibility adapter: retired manual states never affect scoring."""
-    return priority_customers
-
-
 def _priority_level(score: int) -> str:
     if score >= 80:
         return "Hög prio"
@@ -1741,10 +1723,6 @@ def _weighted_recent_average(latest, average) -> float:
     return (_positive_float(latest) * 0.65) + (_positive_float(average) * 0.35)
 
 
-def _format_dfp(value) -> str:
-    return f"{_clean_number(_positive_float(value))} DFP"
-
-
 def _positive_float(value) -> float:
     try:
         number = float(value or 0)
@@ -1781,10 +1759,6 @@ def _cycle_default(cycles: list[float], fallback: int) -> int:
 def _segment_value(customer: dict) -> str:
     segment = str(customer.get("customer_segment") or customer.get("segment") or "").strip().upper()
     return segment[:1] if segment else ""
-
-
-def _segment_rank(segment) -> int:
-    return {"A": 4, "B": 3, "C": 2}.get(str(segment or "").strip().upper()[:1], 1)
 
 
 def _parse_number(value) -> float:

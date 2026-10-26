@@ -24,7 +24,6 @@ vm.runInContext(`
 const esc = s => String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const escAttr = esc; const PLANNING_TIME_ZONE='Europe/Stockholm';
 const getCustomerInsight = c => c;
-const getCustomerGuidance = c => c.customer_guidance || {};
 const filterState = Object.fromEntries(['segment','city','region','focus','risk','delivery','latestContact'].map(k=>[k,new Set()]));
 let customers = [], searchQuery = '', listWorkFilter='all';
 let insightsLoaded = true, insightsLoadFailed = false;

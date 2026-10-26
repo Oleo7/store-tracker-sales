@@ -89,14 +89,13 @@ class OnlyCurrentModelTests(TestCase):
         self.assertEqual(result['action_label'],'')
         self.assertFalse(result['can_call'])
 
-    def test_scoring_aliases_and_workflow_never_leave_old_value_live(self):
+    def test_current_priority_and_business_value_are_present(self):
         row,_=history.model()
+        self.assertEqual(row['value_model_version'],'v3.5')
         self.assertGreater(row['priority_score'],0)
-        scope=row['list_guidance']['action_scope']
-        paused=priority.apply_workflow_suppressions([row],{'c1':{'status':'snoozed','source_scope':scope}})[0]
         for field in ('priority_score','priority_score_precise','contact_priority_precise','work_priority_precise'):
-            self.assertEqual(paused[field],row[field],field)
-        self.assertGreater(paused['business_value_raw'],0)
+            self.assertIsNotNone(row[field],field)
+        self.assertGreater(row['business_value_raw'],0)
 
     def test_ten_day_positive_buyer_and_actual_earlier_promise(self):
         orders=[history.order(70),history.order(1)]
@@ -264,8 +263,7 @@ class CurrentUiAndApplyTests(TestCase):
              'priority_score':100,'list_guidance':{'can_start_unscheduled_contact':True}}
             for c in customers]}
         before=deepcopy(fixture.planning_rows())
-        with patch.object(application,'get_authoritative_priority_snapshot',return_value=current),patch.object(
-                application,'priority_workflow_suppressions',return_value={}):
+        with patch.object(application,'get_authoritative_priority_snapshot',return_value=current):
             result=fixture.client.post('/planning/route-apply',json={'client_request_id':'old-score-injection','preview_token':token})
         self.assertEqual(result.status_code,409,result.get_json())
         self.assertEqual(result.get_json()['code'],'route_contact_changed')

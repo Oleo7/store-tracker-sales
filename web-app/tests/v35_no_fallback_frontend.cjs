@@ -9,7 +9,7 @@ function source(name) {
   const end=html.indexOf('\n  }',start)+4; assert.ok(end>start,name);
   return html.slice(start,end);
 }
-const functions=['sortedModelValue','getWorkPriorityValue','getCustomerGuidance','getCustomerListGuidance',
+const functions=['sortedModelValue','getWorkPriorityValue','getCustomerListGuidance',
   'stableCustomerTieBreak','compareDescendingMissingLast','contactPrioritySort','mapPriorityValue','mapPrioritySort',
   'customerCanStartContact'];
 const context=vm.createContext({assert,console});
@@ -23,7 +23,6 @@ vm.runInContext(`
    assert.equal(mapPriorityValue(stale,'raw'),null);
    assert.equal(customerCanStartContact(stale),false);
    assert.deepEqual(getCustomerListGuidance(stale),{});
-   assert.deepEqual(getCustomerGuidance(stale),{});
  }
  const good={customer:'Current',customer_id:'good',value_model_version:'v3.5',work_priority_precise:80,
    work_priority_score:80,customer_guidance:{can_start_unscheduled_contact:true}};

@@ -55,7 +55,6 @@ load_dotenv()
 
 from priority import (
     SCORE_VERSION,
-    apply_workflow_suppressions,
     build_contact_features,
     build_order_features,
     build_priority_customers,
@@ -127,7 +126,7 @@ from route_optimization import (
 )
 from crm_utils import (
     USER_COLUMNS, SETTINGS_COLUMNS, is_yes,
-    split_email_values, stockholm_now, stockholm_today, stockholm_time_text,
+    split_email_values, stockholm_now, stockholm_today,
 )
 from planning_suggestions import (
     PlanningSuggestionService,
@@ -1614,19 +1613,6 @@ def worksheet_snapshot(
 
 
 @serialized_crm_write
-def batch_update_sheet_rows(sheet, headers, row_updates):
-    data = []
-    for row_index, row in row_updates:
-        values = [row.get(header, "") for header in headers]
-        data.append({
-            "range": f"A{row_index}:{rowcol_to_a1(row_index, len(headers))}",
-            "values": [values],
-        })
-    if data:
-        sheet.batch_update(data, value_input_option="RAW")
-        invalidate_sheet_for_write(sheet)
-
-
 @serialized_crm_write
 def batch_update_sheet_changes(sheet, headers, row_changes, new_rows=()):
     """Commit sparse mutations and contiguous appended rows in one API call."""
@@ -1663,21 +1649,6 @@ def batch_update_sheet_changes(sheet, headers, row_changes, new_rows=()):
         sheet.batch_update(data, value_input_option="RAW")
         invalidate_sheet_for_write(sheet)
     return appended_indexes
-
-
-def run_with_retry(operation, *, attempts=5, base_delay=0.5, label="Google Sheets"):
-    last_error = None
-    for attempt in range(attempts):
-        try:
-            return operation()
-        except Exception as exc:
-            last_error = exc
-            if attempt >= attempts - 1:
-                break
-            delay = base_delay * (2 ** attempt)
-            app.logger.warning("%s failed (attempt %s/%s): %s", label, attempt + 1, attempts, exc)
-            time.sleep(delay)
-    raise last_error
 
 
 def current_user():
@@ -2794,25 +2765,6 @@ def resolve_planning_customer(spreadsheet, data):
     return customer
 
 
-def customer_identity_matches(
-    left_name,
-    left_number,
-    right_name,
-    right_number,
-    left_customer_id="",
-    right_customer_id="",
-):
-    left_id_key = normalize_key(left_customer_id)
-    right_id_key = normalize_key(right_customer_id)
-    if left_id_key and right_id_key:
-        return left_id_key == right_id_key
-    left_number_key = normalize_key(left_number)
-    right_number_key = normalize_key(right_number)
-    if left_number_key and right_number_key:
-        return left_number_key == right_number_key
-    return normalize_key(left_name) == normalize_key(right_name)
-
-
 def parse_date_value(value):
     text = str(value or "").strip()
     if not text:
@@ -3408,25 +3360,6 @@ def is_positive_contact(result):
     return any(phrase in text for phrase in positive_results)
 
 
-def segment_sort_key(segment):
-    text = str(segment or "").strip()
-    if not text:
-        return (99, "")
-    first = text[:1].upper()
-    if first in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-        return (ord(first) - ord("A"), text.casefold())
-    return (50, text.casefold())
-
-
-def now_text():
-    return stockholm_time_text()
-
-
-def format_datetime_value(value, fallback=""):
-    parsed = value if isinstance(value, datetime) else parse_datetime_value(value)
-    return parsed.strftime("%Y-%m-%d %H:%M:%S") if parsed else fallback
-
-
 def get_customer_by_row(spreadsheet, row_number):
     sheet = get_worksheet(spreadsheet, "customers_enriched")
     rows, _cache_hit = cached_worksheet_values(sheet, spreadsheet)
@@ -3904,14 +3837,6 @@ def build_planned_activity_row(
                 contact_type,
             ) else "N"
         ),
-    }
-
-
-def owner_contact_matches(contact, owner):
-    responsible = normalize_key(contact.get("sales_person"))
-    return responsible in {
-        normalize_key((owner or {}).get("name")),
-        normalize_key((owner or {}).get("user_name")),
     }
 
 
@@ -5283,11 +5208,6 @@ def build_calibration_rows(score_events, order_rows, customers, *, today=None):
             ),
         })
     return rows
-
-
-def priority_workflow_suppressions(spreadsheet, priority_customers):
-    """Retired decisions are inert, including legacy suggestion storage."""
-    return {}
 
 
 def read_customer_state_events(spreadsheet, *, use_cache=True):
@@ -8994,14 +8914,6 @@ def route_optimization_reset_at(value=None):
     current = value or stockholm_now()
     start = current.date() + timedelta(days=(7 - current.weekday()))
     return datetime.combine(start, datetime_time.min, tzinfo=STOCKHOLM_ZONE).isoformat()
-
-
-def _route_activity_duration_seconds(row, default_minutes):
-    try:
-        minutes = max(1, int(math.ceil(float(row.get("duration_minutes") or default_minutes))))
-    except (TypeError, ValueError, OverflowError):
-        minutes = default_minutes
-    return minutes * 60
 
 
 def build_route_optimization_inputs(

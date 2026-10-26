@@ -4784,28 +4784,7 @@
     return ">3 månader";
   }
 
-  function getRiskStatusClass(risk) {
-    return {
-      "Aktiv": "active",
-      "Bevaka": "watch",
-      "Risk": "medium",
-      "Hög risk": "high",
-      "Återaktivering krävs": "reactivate",
-    }[risk] || "";
-  }
 
-  function getRiskBadgeHtml(risk, style = "") {
-    const tagClass = {
-      "Aktiv": "tag-green",
-      "Bevaka": "tag-yellow",
-      "Risk": "tag-orange",
-      "Hög risk": "tag-red",
-      "Återaktivering krävs": "tag-red",
-    }[risk];
-    if (!tagClass) return "";
-    const styleAttr = style ? ` style="${style}"` : "";
-    return `<span class="tag ${tagClass}"${styleAttr}>${esc(risk)}</span>`;
-  }
 
 
   function customerInsightKey(value) {
@@ -4823,18 +4802,8 @@
     return insights[customerInsightKey(c?.customer)] || insights[rawKey] || {};
   }
 
-  function segmentRank(segment) {
-    const value = String(segment || "").trim().toUpperCase()[0];
-    return { A: 4, B: 3, C: 2 }[value] || 1;
-  }
 
-  function hasPriorityScore(insight) {
-    return getWorkPriorityValue(insight) !== null;
-  }
 
-  function prioritySort(a, b) {
-    return contactPrioritySort(a, b);
-  }
 
   function sortedModelValue(insight, key) {
     const raw = insight?.[key];
@@ -4883,13 +4852,6 @@
     return tone === "next-action-red" ? "act" : tone === "next-action-green" ? "planned" : "wait";
   }
 
-  function getCustomerGuidance(customerOrInsight) {
-    const insight = customerOrInsight?.customer_guidance
-      ? customerOrInsight
-      : getCustomerInsight(customerOrInsight);
-    return insight?.value_model_version === "v3.5"
-      ? (insight.list_guidance || insight.customer_guidance || {}) : {};
-  }
 
   function getCustomerListGuidance(customerOrInsight) {
     const insight = customerOrInsight?.list_guidance || customerOrInsight?.customer_guidance
@@ -5095,12 +5057,6 @@
     }
   }
 
-  async function refreshCustomerDecisions() {
-    const loaded = await loadInsights();
-    if (currentCustomer && activeViewName() === "detail") renderCustomerDecisionDetail(currentCustomer);
-    if (activeViewName() === "planning") await loadPlanningAttention();
-    return loaded;
-  }
 
 
   function getListSignature() {

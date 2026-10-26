@@ -151,8 +151,9 @@ def main():
             global_snapshot = application.get_authoritative_priority_snapshot(
                 spreadsheet, today=application.stockholm_today())
             pre_workflow = global_snapshot["priorities"]
-            workflow = application.priority_workflow_suppressions(spreadsheet, pre_workflow)
-            priorities = application.apply_workflow_suppressions(pre_workflow, workflow)
+            # Retired workflow overlays are intentionally absent from the current model.
+            workflow = {}
+            priorities = pre_workflow
             users = application.get_user_rows(spreadsheet)
             public_users = [application.public_user(user) for user in users
                             if application.is_yes(user.get("active"))]

@@ -84,13 +84,11 @@ class GuidanceIntegrityTests(TestCase):
                     self.assertEqual(g['status_key'], 'idle')
                     self.assertNotIn('11\u201390', g['focus_label'])
 
-    def test_reorder_date_is_compact_swedish_and_year_aware(self):
+    def test_reorder_date_is_compact_swedish(self):
         rows = [order('last', 20), order('middle', 40), order('first', 60)]
         item = scored(orders=rows)
         self.assertEqual(item['expected_next_order_date'], '2026-09-18')
         self.assertEqual(self.assert_canonical(item)['reason_text'], 'Ber\u00e4knad n\u00e4sta order 18 sep')
-        self.assertEqual(p._guidance_date(date(2025,12,31), TODAY), '31 dec 2025')
-        self.assertEqual(p._guidance_date(date(2027,1,1), TODAY), '1 jan 2027')
 
 
     def test_dialogue_matrix_uses_buyer_window_and_preserves_first_order_phase(self):
