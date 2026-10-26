@@ -5,8 +5,10 @@ from zoneinfo import ZoneInfo
 from itertools import permutations
 from pathlib import Path
 import random
+import shutil
+import subprocess
 import sys
-from unittest import TestCase, main
+from unittest import TestCase, main, skipUnless
 from unittest.mock import patch
 
 import requests
@@ -1051,18 +1053,71 @@ class FrontendRouteProposalFlowTests(TestCase):
         self.assertIn('@app.route("/planning/route-import", methods=["POST"])', source)
         self.assertIn('ROUTE_PROPOSALS_SHEET = "route_proposals"', source)
         self.assertIn("LEGACY/ROLLBACK COMPATIBILITY", source)
+        self.assertNotIn("async function proposeRoute()", self.html)
+        self.assertNotIn("function renderRouteProposalPanel()", self.html)
 
-    def test_route_proposal_seeds_the_editable_map_route(self):
-        self.assertIn("function seedRouteProposalMapSelection()", self.html)
-        self.assertIn(
-            "if (routeProposal) seedRouteProposalMapSelection();",
-            self.html,
-        )
+    def test_manual_map_selection_and_drafts_are_retained(self):
+        self.assertIn("function restoreMapRouteDraft()", self.html)
+        self.assertIn("function saveCurrentMapRouteDraft()", self.html)
+        self.assertIn("restoreMapRouteDraft();", self.html)
+        self.assertIn("saveCurrentMapRouteDraft();", self.html)
         self.assertIn("return routeInMapStops;", self.html)
-        self.assertIn(
-            "if (!routeProposal) saveCurrentMapRouteDraft();",
-            self.html,
+        self.assertNotIn("seedRouteProposalMapSelection", self.html)
+
+    @skipUnless(shutil.which("node"), "Node.js required for manual map regression")
+    def test_manual_map_draft_and_google_maps_export_runtime(self):
+        """Exercise shipped map helpers without the retired route proposal state."""
+        script = r'''
+const fs = require("node:fs"), vm = require("node:vm"), assert = require("node:assert/strict");
+const html = fs.readFileSync(process.argv[1], "utf8");
+const source = name => {
+  const start = html.indexOf("  function " + name + "(");
+  assert.ok(start >= 0, name);
+  const end = html.indexOf("\n  }", start);
+  assert.ok(end > start, name);
+  return html.slice(start, end + 4);
+};
+const environment = [
+  'const MAP_ROUTE_DRAFT_KEY = "test-map-route";',
+  'const MAP_ROUTE_DRAFT_TTL_MS = 12 * 60 * 60 * 1000;',
+  'let routeInMapStops = []; let hasStoredRouteOutsideCurrentMap = false;',
+  'const mapStops = [{row:2,latitude:57.7,longitude:11.9}, {row:3,latitude:57.8,longitude:11.8}];',
+  'const data = new Map();',
+  'const localStorage = {getItem:k=>data.get(k)||null, setItem:(k,v)=>data.set(k,v), removeItem:k=>data.delete(k)};',
+  'const openCalls = [];',
+  'const window = {open:(url,target)=>openCalls.push({url,target})};',
+  'const getRouteCoordinatePair = x => x ? {latitude:x.latitude,longitude:x.longitude} : null;',
+  'const renderMapMarkers = () => {}, renderMapStopList = () => {}, showToast = () => {};',
+].join("\n");
+const names = [
+  "getRouteDraftRows", "loadMapRouteDraft", "saveCurrentMapRouteDraft",
+  "restoreMapRouteDraft", "clearMapRoute", "getEffectiveMapRouteStops",
+  "openInGoogleMaps",
+];
+const context = vm.createContext({assert, Map, Date, JSON});
+vm.runInContext(environment + "\n" + names.map(source).join("\n"), context);
+vm.runInContext([
+  'routeInMapStops = [mapStops[1],mapStops[0]];',
+  'saveCurrentMapRouteDraft();',
+  'assert.equal(JSON.parse(localStorage.getItem(MAP_ROUTE_DRAFT_KEY)).rows.join(","),"3,2");',
+  'routeInMapStops = [];',
+  'restoreMapRouteDraft();',
+  'assert.equal(getEffectiveMapRouteStops().map(x=>x.row).join(","),"3,2");',
+  'openInGoogleMaps();',
+  'assert.equal(openCalls.length,1);',
+  'assert.ok(openCalls[0].url.includes("destination=57.7,11.9"));',
+  'assert.ok(openCalls[0].url.includes("waypoints=57.8,11.8"));',
+  'clearMapRoute();',
+  'assert.equal(routeInMapStops.length,0);',
+  'assert.equal(localStorage.getItem(MAP_ROUTE_DRAFT_KEY),null);',
+  'assert.equal(hasStoredRouteOutsideCurrentMap,false);',
+].join("\n"), context);
+'''
+        result = subprocess.run(
+            ["node", "-e", script, str(WEB_APP_DIR / "index.html")],
+            capture_output=True, text=True, timeout=20,
         )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_route_proposal_uses_the_standard_map_controls(self):
         self.assertIn(
@@ -1078,60 +1133,48 @@ class FrontendRouteProposalFlowTests(TestCase):
         self.assertNotIn("route-proposal-stage-link", self.html)
         self.assertNotIn("Google Maps delar rutten", self.html)
 
-    def test_daily_route_is_checked_before_geolocation(self):
-        get_index = self.html.index('fetch(`${API}/route-proposal`, {\n        method: "GET"')
-        position_index = self.html.index(
-            "const currentPosition = await getCurrentPositionForRoute();"
+    def test_legacy_route_fetch_is_removed_but_calendar_preview_still_uses_gps(self):
+        self.assertNotIn('fetch(`${API}/route-proposal`', self.html)
+        self.assertNotIn('planningFetchJson("/planning/route-import"', self.html)
+        preview = self.html.split("async function openPlanningRoutePreview()", 1)[1]
+        self.assertIn("getCurrentPositionForRoute()", preview)
+        self.assertIn("savePlanningRouteRecoveryState(payload)", preview)
+        self.assertLess(
+            preview.index("getCurrentPositionForRoute()"),
+            preview.index("savePlanningRouteRecoveryState(payload)"),
         )
-        self.assertLess(get_index, position_index)
 
-    def test_seller_route_context_uses_owned_customers(self):
+    def test_manual_map_uses_visible_filtered_customers_and_current_priority(self):
         self.assertIn("function currentUserIsSeller()", self.html)
-        self.assertIn("function getRouteProposalBaseCustomers()", self.html)
-        self.assertIn(
-            "normalizeRouteIdentity(customer?.sales_person) === sellerName",
-            self.html,
-        )
+        self.assertIn("const customersWithCoordinates = getFilteredCustomers().slice()", self.html)
+        self.assertIn(".sort(mapPrioritySort).filter(hasMapCoordinates);", self.html)
+        self.assertNotIn("function getRouteProposalBaseCustomers()", self.html)
 
-    def test_route_ui_shows_owner_date_and_return_to_start(self):
-        self.assertIn(
-            "Ruttförslag för ${owner} (${routeDate})",
-            self.html,
-        )
-        self.assertIn("Retur till start", self.html)
-        self.assertIn("const ROUTE_MAX_STOPS = 15;", self.html)
-        self.assertIn("const ROUTE_MAX_TOTAL_MINUTES = 540;", self.html)
+    def test_active_calendar_route_preview_remains(self):
+        self.assertIn("function renderPlanningRoutePreview(preview)", self.html)
+        self.assertIn('"Fyll dagen automatiskt"', self.html)
+        self.assertIn('id="planning-route-preview-btn" type="button">Skapa ruttförslag</button>', self.html)
+        self.assertNotIn("route-proposal-metrics", self.html)
 
-    def test_google_maps_export_returns_to_route_start(self):
-        self.assertIn(
-            'const useRouteProposal = mapContext !== "planning" && routeProposal;',
-            self.html,
-        )
-        self.assertIn(
-            "const returnPoint = useRouteProposal ? getRouteCoordinatePair(routeProposal.start) : null;",
-            self.html,
-        )
-        self.assertIn(
-            "const waypoints = useRouteProposal ? stops : stops.slice(0, -1);",
-            self.html,
-        )
+    def test_manual_map_export_uses_last_selected_stop_not_retired_proposal(self):
+        self.assertIn("const dest = getRouteCoordinatePair(stops[stops.length - 1]);", self.html)
+        self.assertIn("const waypoints = stops.slice(0, -1);", self.html)
+        self.assertNotIn("routeProposal.start", self.html)
 
     def test_priority_sorted_list_replaces_daily_focus(self):
         self.assertNotIn('id="chip-daily-focus"', self.html)
         self.assertNotIn("dailyFocusActive", self.html)
         self.assertNotIn("DAILY_FOCUS_LIMIT", self.html)
         self.assertIn("const LIST_BATCH_SIZE = 20;", self.html)
-        self.assertIn(
-            "return getFilteredCustomers().slice().sort(mapPrioritySort);",
-            self.html,
-        )
+        self.assertIn("getBaseFilteredCustomers()", self.html)
+        self.assertIn(".sort(mapPrioritySort).filter(hasMapCoordinates);", self.html)
 
     def test_customer_cards_use_one_priority_guidance_layout(self):
         self.assertIn("getPrioritySummaryHtml(c)", self.html)
         self.assertIn("getNextActionHtml(c)", self.html)
         self.assertNotIn("getPotentialHtml(c)", self.html)
         self.assertIn("getCardDatesHtml(c)", self.html)
-        self.assertIn("getCustomerCardAriaLabel(c, routeStop)", self.html)
+        self.assertIn("getCustomerCardAriaLabel(c)", self.html)
         self.assertIn('visit: "Besök"', self.html)
         self.assertIn('phone: "Telefon"', self.html)
         self.assertNotIn("getCustomerValueHtml(c)", self.html)
@@ -1139,18 +1182,16 @@ class FrontendRouteProposalFlowTests(TestCase):
         self.assertNotIn("Varför denna prioritet?", self.html)
         self.assertNotIn("Missad uppföljning</span>", self.html)
 
-    def test_route_candidates_ignore_recommended_channel(self):
-        start = self.html.index("function getRouteProposalCandidates(")
-        end = self.html.index("function getStockholmRouteDate()", start)
-        candidate_source = self.html[start:end]
-        self.assertIn("score > 0", candidate_source)
-        self.assertNotIn("recommended_channel", candidate_source)
+    def test_retired_candidate_builder_is_removed(self):
+        self.assertNotIn("function getRouteProposalCandidates(", self.html)
+        self.assertNotIn("getRouteProposalContext()", self.html)
+        self.assertIn("getFilteredCustomers().slice()", self.html)
 
-    def test_route_card_does_not_repeat_priority_score(self):
-        start = self.html.index('const routeSummary = routeStop ? `')
-        end = self.html.index("` : \"\";", start)
-        route_summary_source = self.html[start:end]
-        self.assertNotIn("routeStop.priority_score", route_summary_source)
+    def test_legacy_route_card_is_removed_while_current_guidance_remains(self):
+        self.assertNotIn("route-card-summary", self.html)
+        self.assertNotIn("route-stop-number", self.html)
+        self.assertIn("${getPrioritySummaryHtml(c)}", self.html)
+        self.assertIn("${getNextActionHtml(c)}", self.html)
 
     def test_watchlist_panel_is_removed_from_insights(self):
         self.assertNotIn("Butiker värda att bevaka", self.html)

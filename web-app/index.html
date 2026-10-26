@@ -240,137 +240,6 @@
       opacity: 0.68;
     }
 
-    /* ── Automatic route proposal ── */
-    .route-proposal-panel {
-      display: none;
-      margin: 12px 14px 0;
-      padding: 13px 14px;
-      border: 1px solid #e8eaf0;
-      border-radius: 14px;
-      background: #fff;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-    }
-    .route-proposal-panel.visible { display: block; }
-    .route-proposal-panel.loading {
-      border-color: #d9e2f2;
-      background: #f7faff;
-    }
-    .route-proposal-panel.message {
-      border-color: #f0d9df;
-      background: #fff8fa;
-    }
-    .route-proposal-heading {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .route-proposal-title {
-      color: #1a1a2e;
-      font-size: 0.9rem;
-      font-weight: 800;
-      line-height: 1.3;
-    }
-    .route-proposal-copy {
-      margin-top: 3px;
-      color: #777;
-      font-size: 0.78rem;
-      line-height: 1.45;
-    }
-    .route-proposal-metrics {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 11px;
-    }
-    .route-proposal-metric {
-      min-width: 0;
-      padding: 8px 9px;
-      border-radius: 10px;
-      background: #f7f8fa;
-    }
-    .route-proposal-metric-label {
-      color: #8b91a0;
-      font-size: 0.63rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-    .route-proposal-metric-value {
-      margin-top: 2px;
-      color: #1a1a2e;
-      font-size: 0.8rem;
-      font-weight: 800;
-      line-height: 1.25;
-    }
-    .route-proposal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      margin-top: 11px;
-    }
-    .route-proposal-actions .action-btn {
-      width: auto;
-      min-height: 38px;
-      margin: 0;
-      padding: 8px 12px;
-      font-size: 0.76rem;
-    }
-    .route-proposal-map-hint {
-      margin-top: 11px;
-      color: #777;
-      font-size: 0.74rem;
-      line-height: 1.4;
-    }
-    .route-stop-number {
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      border-radius: 50%;
-      background: #22c55e;
-      color: #fff;
-      font-size: 0.75rem;
-      font-weight: 800;
-      box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
-    }
-    .route-card-summary {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 9px;
-    }
-    .route-card-summary span {
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: #edf8f0;
-      color: #18713b;
-      font-size: 0.7rem;
-      font-weight: 750;
-    }
-    @media (max-width: 640px) {
-      .route-proposal-metrics {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .route-proposal-metric:last-child {
-        grid-column: 1 / -1;
-      }
-    }
-    @media (max-width: 420px) {
-      .route-proposal-heading {
-        flex-direction: column;
-      }
-      .route-proposal-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .route-proposal-actions .action-btn {
-        width: 100%;
-      }
-    }
-
     /* ── Filter modal (top-anchored, keyboard-safe) ── */
     .filter-backdrop {
       display: none;
@@ -4297,9 +4166,6 @@
   const FREEZER_FIELD_SET = new Set(FREEZER_FIELDS);
   const FREEZER_LABELS = { Franui: "Franui", Schufrulade: "Schufrulade", Boujee: "Boujee", polarbar: "Polarbär", none: "Inget" };
   const LIST_BATCH_SIZE = 20;
-  const ROUTE_MAX_TOTAL_MINUTES = 540;
-  const ROUTE_MAX_STOPS = 15;
-  const ROUTE_SERVICE_MINUTES_PER_STOP = 20;
   const MAP_ROUTE_DRAFT_KEY = "st_map_route_draft_v1";
   const MAP_ROUTE_DRAFT_TTL_MS = 12 * 60 * 60 * 1000;
   const PLANNING_TIME_ZONE = "Europe/Stockholm";
@@ -4346,13 +4212,6 @@
   let customersLoadPromise = null;
   let searchDebounceTimer = null;
   const sharedJsonRequests = new Map();
-  let routeProposal = null;
-  let routeProposalMapSeededSignature = "";
-  let routeProposalLoading = false;
-  let routeProposalMessage = null;
-  let routeProposalRequestSerial = 0;
-  let routeProposalRequestSignature = "";
-  let routeProposalAbortController = null;
   let followupInsights = null;
   let followupInsightsLoading = false;
   let contactLogLoaded = false;
@@ -4384,7 +4243,6 @@
   let planningRoutePreview = null;
   let planningRoutePreviewRequestId = "";
   let planningRouteApplyRequestId = "";
-  let planningRouteImportRequestId = "";
   const PLANNING_ROUTE_RECOVERY_STORAGE_KEY = "store-tracker:route-preview-recovery:v1";
   const PLANNING_ROUTE_RECOVERY_TTL_MS = 30 * 60 * 1000;
   const PLANNING_ROUTE_RECOVERY_WINDOW_MS = 20 * 60 * 1000;
@@ -4980,7 +4838,7 @@
     return getCustomerListGuidance(c).status_key ? "guidance-card" : "priority-neutral";
   }
 
-  function getCustomerCardAriaLabel(c, routeStop = null) {
+  function getCustomerCardAriaLabel(c) {
     const ins = getCustomerInsight(c);
     const guidance = getCustomerListGuidance(ins);
     const priority = getWorkPriorityValue(ins);
@@ -4990,8 +4848,7 @@
     const focus = guidance.focus_label || "fokus saknas";
     const status = getGuidanceStatusLabel(guidance);
     const action = guidance.action_label || "ingen rekommendation";
-    const prefix = routeStop ? `Stopp ${routeStop.sequence}. ` : "";
-    return `${prefix}${c.customer}. ${score}. Fokus: ${focus}. Status: ${status}. Nästa: ${action}.`;
+    return `${c.customer}. ${score}. Fokus: ${focus}. Status: ${status}. Nästa: ${action}.`;
   }
 
   function getCardPlanningButtonHtml(c) {
@@ -5193,24 +5050,7 @@
     return contactPrioritySort(a, b);
   }
 
-  function getRouteProposalBaseCustomers() {
-    if (!currentUserIsSeller()) return getFilteredCustomers().slice().sort(mapPrioritySort);
-    const sellerName = normalizeRouteIdentity(currentUser?.name || currentUser?.user_name);
-    return customers.filter(customer =>
-      normalizeRouteIdentity(customer?.sales_person) === sellerName
-    );
-  }
 
-  function getRouteProposalCandidates(baseCustomers = getRouteProposalBaseCustomers()) {
-    if (!insightsLoaded) return [];
-    return baseCustomers.filter(customer => {
-      const score = mapPriorityValue(getCustomerInsight(customer), "raw");
-      return !isCancelledCustomer(customer)
-        && hasValidRouteCoordinates(customer)
-        && Number.isFinite(score)
-        && score > 0;
-    });
-  }
 
   function getStockholmRouteDate() {
     return new Intl.DateTimeFormat("sv-SE", {
@@ -5221,29 +5061,8 @@
     }).format(new Date());
   }
 
-  function getRouteProposalSignature() {
-    return [
-      "daily-route",
-      getStockholmRouteDate(),
-      normalizeRouteIdentity(currentUser?.user_name),
-    ].join(":");
-  }
 
-  function getRouteProposalContext() {
-    const baseCustomers = getRouteProposalBaseCustomers();
-    const candidates = getRouteProposalCandidates(baseCustomers);
-    return {
-      baseCustomers,
-      candidates,
-      signature: getRouteProposalSignature(),
-    };
-  }
 
-  function getRouteProposalStop(customer) {
-    if (customer?.routeProposalStop) return customer.routeProposalStop;
-    if (!routeProposal) return null;
-    return routeProposal.stopByRow[String(Number(customer?.row))] || null;
-  }
 
   function formatRouteMinutes(value) {
     const minutes = Math.max(0, Math.round(Number(value) || 0));
@@ -5257,183 +5076,14 @@
     return Number(value || 0).toLocaleString("sv-SE", { maximumFractionDigits: 1 });
   }
 
-  function formatRouteDate(value) {
-    const text = String(value || "").trim();
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-    if (!match) return text;
-    return new Date(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      12
-    ).toLocaleDateString("sv-SE", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  }
 
-  // LEGACY ROLLBACK SUPPORT: these proposal helpers have no visible list-view
-  // entry point. Calendar "Fyll dagen automatiskt" is the active route flow.
-  function updateRouteProposalChip() {
-    const chip = document.getElementById("chip-route-proposal");
-    if (!chip) return;
-    chip.disabled = routeProposalLoading;
-    chip.classList.toggle("active", Boolean(routeProposal));
-    chip.setAttribute("aria-pressed", String(Boolean(routeProposal)));
-    chip.setAttribute("aria-busy", String(routeProposalLoading));
-    if (routeProposalLoading) {
-      chip.textContent = "Beräknar rutt…";
-    } else if (routeProposal) {
-      chip.textContent = `Ruttförslag · ${routeProposal.stops.length}`;
-    } else {
-      chip.textContent = "🧭 Föreslå rutt";
-    }
-  }
 
-  function renderRouteProposalPanel() {
-    updateRouteProposalChip();
-    const panel = document.getElementById("route-proposal-panel");
-    if (!panel) return;
 
-    if (routeProposalLoading) {
-      panel.className = "route-proposal-panel visible loading";
-      panel.innerHTML = `
-        <div class="route-proposal-title">Beräknar bästa rutt…</div>
-        <div class="route-proposal-copy">Vi kontrollerar först om dagens rutt redan är sparad. En ny rutt utgår från din position och dina kunder.</div>
-      `;
-      return;
-    }
 
-    if (routeProposal) {
-      const summary = routeProposal.summary;
-      const mapSelectionChanged = routeMapSelectionDiffersFromProposal();
-      const owner = esc(routeProposal.routeOwner || currentUser?.name || currentUser?.user_name || "");
-      const routeDate = esc(formatRouteDate(routeProposal.routeDate));
-      const savedCopy = routeProposal.cached
-        ? "Dagens sparade rutt visas utan en ny Routes API-beräkning."
-        : "Rutten har beräknats och sparats för resten av dagen.";
-      panel.className = "route-proposal-panel visible";
-      panel.innerHTML = `
-        <div class="route-proposal-heading">
-          <div>
-            <div class="route-proposal-title">Ruttförslag för ${owner} (${routeDate})</div>
-            <div class="route-proposal-copy">${summary.stop_count} butiker · start och mål: Din position · ${savedCopy}</div>
-          </div>
-        </div>
-        <div class="route-proposal-metrics">
-          <div class="route-proposal-metric">
-            <div class="route-proposal-metric-label">Prioritetspoäng</div>
-            <div class="route-proposal-metric-value">${formatRouteScore(summary.total_priority_score)}</div>
-          </div>
-          <div class="route-proposal-metric">
-            <div class="route-proposal-metric-label">Körtid</div>
-            <div class="route-proposal-metric-value">${formatRouteMinutes(summary.drive_minutes)}</div>
-          </div>
-          <div class="route-proposal-metric">
-            <div class="route-proposal-metric-label">Besökstid</div>
-            <div class="route-proposal-metric-value">${summary.stop_count} × ${ROUTE_SERVICE_MINUTES_PER_STOP} min</div>
-          </div>
-          <div class="route-proposal-metric">
-            <div class="route-proposal-metric-label">Total tid</div>
-            <div class="route-proposal-metric-value">${formatRouteMinutes(summary.total_minutes)}</div>
-          </div>
-          <div class="route-proposal-metric">
-            <div class="route-proposal-metric-label">Retur till start</div>
-            <div class="route-proposal-metric-value">${formatRouteMinutes(summary.return_drive_minutes)}</div>
-          </div>
-        </div>
-        <div class="route-proposal-map-hint">Arbetsdag 08:00–17:00 med lunch 12:00–12:45, 20 minuters besök per butik och retur till start senast 17:00. Öppna kartan för att ta bort eller lägga tillbaka stopp.</div>
-        ${mapSelectionChanged ? `
-          <div class="planning-conflict" style="margin-bottom:10px">
-            Kartans stopp har ändrats. Beräkna ett nytt verifierat ruttförslag eller återställ stoppordningen innan rutten sparas i Planering.
-          </div>` : ""}
-        <div class="route-proposal-actions">
-          <button class="action-btn secondary" id="route-proposal-clear-btn" type="button">Rensa ruttförslag</button>
-          <button class="action-btn" id="route-proposal-map-btn" type="button">Visa på karta</button>
-          <button class="action-btn" id="route-proposal-planning-btn" type="button" ${mapSelectionChanged ? "disabled" : ""}>Spara i Planering</button>
-        </div>
-      `;
-      document.getElementById("route-proposal-clear-btn").addEventListener("click", () => {
-        clearRouteProposal({ announce: true });
-      });
-      document.getElementById("route-proposal-map-btn").addEventListener("click", showMapView);
-      document.getElementById("route-proposal-planning-btn").addEventListener("click", importCurrentRouteToPlanning);
-      return;
-    }
 
-    if (routeProposalMessage) {
-      panel.className = "route-proposal-panel visible message";
-      panel.innerHTML = `
-        <div class="route-proposal-title">${esc(routeProposalMessage.title || "Ruttförslag")}</div>
-        <div class="route-proposal-copy">${esc(routeProposalMessage.text)}</div>
-        ${routeProposalMessage.canRetry ? `
-          <div class="route-proposal-actions">
-            <button class="action-btn" id="route-proposal-retry-btn" type="button">Försök igen</button>
-          </div>
-        ` : ""}
-      `;
-      const retryButton = document.getElementById("route-proposal-retry-btn");
-      if (retryButton) retryButton.addEventListener("click", proposeRoute);
-      return;
-    }
 
-    panel.className = "route-proposal-panel";
-    panel.innerHTML = "";
-  }
 
-  function setRouteProposalMessage(text, options = {}) {
-    routeProposalMessage = {
-      text,
-      title: options.title || "Ruttförslag",
-      canRetry: options.canRetry !== false,
-    };
-    renderRouteProposalPanel();
-  }
 
-  function cancelRouteProposalRequest() {
-    routeProposalRequestSerial += 1;
-    if (routeProposalAbortController) routeProposalAbortController.abort();
-    routeProposalAbortController = null;
-    routeProposalRequestSignature = "";
-    routeProposalLoading = false;
-  }
-
-  function leaveInvalidatedRouteMap() {
-    const mapView = document.getElementById("view-map");
-    if (mapView?.classList.contains("active")) showView("list");
-    if (detailReturnView === "map") detailReturnView = "list";
-  }
-
-  function resetRouteProposalMapSelection() {
-    routeProposalMapSeededSignature = "";
-    routeInMapStops = [];
-    hasStoredRouteOutsideCurrentMap = false;
-  }
-
-  function routeMapSelectionDiffersFromProposal() {
-    if (
-      !routeProposal ||
-      routeProposalMapSeededSignature !== routeProposal.signature
-    ) {
-      return false;
-    }
-    const proposalRows = (routeProposal.rows || []).map(Number);
-    const selectedRows = routeInMapStops.map(stop => Number(stop.row));
-    return proposalRows.length !== selectedRows.length ||
-      proposalRows.some((row, index) => row !== selectedRows[index]);
-  }
-
-  function clearRouteProposal({ announce = false } = {}) {
-    const hadRoute = Boolean(routeProposal || routeProposalLoading);
-    cancelRouteProposalRequest();
-    routeProposal = null;
-    resetRouteProposalMapSelection();
-    routeProposalMessage = null;
-    leaveInvalidatedRouteMap();
-    renderList();
-    if (announce && hadRoute) showToast("Ruttförslaget rensades");
-  }
 
   function routeProposalError(code, message, details = null) {
     const error = new Error(message || code);
@@ -5442,154 +5092,6 @@
     return error;
   }
 
-  function normalizeRouteProposalResponse(payload, context) {
-    if (!payload || payload.ok !== true || !Array.isArray(payload.stops) || !payload.summary) {
-      throw routeProposalError("invalid_route_response", "Ogiltigt svar från ruttjänsten.");
-    }
-
-    const start = getRouteCoordinatePair(payload.start);
-    if (!start) throw routeProposalError("invalid_route_response", "Ruttens startposition saknas.");
-
-    const candidateByRow = new Map(customers.map(customer => [Number(customer.row), customer]));
-    const seenRows = new Set();
-    const stops = payload.stops.map(rawStop => {
-      const row = Number(rawStop?.row);
-      const sequence = Number(rawStop?.sequence);
-      const priorityScore = Number(rawStop?.priority_score);
-      const legDriveMinutes = Number(rawStop?.leg_drive_minutes);
-      const cumulativeDriveMinutes = Number(rawStop?.cumulative_drive_minutes);
-      const cumulativeTotalMinutes = Number(rawStop?.cumulative_total_minutes);
-      const position = getRouteCoordinatePair(rawStop);
-      const customer = candidateByRow.get(row);
-
-      if (!Number.isInteger(row) || !Number.isInteger(sequence) || sequence < 1 || seenRows.has(row) || !customer) {
-        throw routeProposalError("invalid_route_response", "Ruttjänsten returnerade ett okänt eller dubblerat stopp.");
-      }
-      if (rawStop.customer && customerInsightKey(rawStop.customer) !== customerInsightKey(customer.customer)) {
-        throw routeProposalError("invalid_route_response", "Kundraden ändrades medan rutten beräknades.");
-      }
-      if (!position || !Number.isFinite(priorityScore) || priorityScore <= 0) {
-        throw routeProposalError("invalid_route_response", "Ett stopp saknar giltiga koordinater eller prioritetspoäng.");
-      }
-      if (
-        !Number.isFinite(legDriveMinutes) || legDriveMinutes < 0
-        || !Number.isFinite(cumulativeDriveMinutes) || cumulativeDriveMinutes < 0
-        || !Number.isFinite(cumulativeTotalMinutes) || cumulativeTotalMinutes < 0
-        || cumulativeTotalMinutes > ROUTE_MAX_TOTAL_MINUTES + 0.01
-      ) {
-        throw routeProposalError("invalid_route_response", "Ruttjänsten returnerade ogiltiga tidsvärden.");
-      }
-
-      seenRows.add(row);
-      return {
-        row,
-        customer: String(rawStop.customer || customer.customer),
-        latitude: position.latitude,
-        longitude: position.longitude,
-        sequence,
-        priority_score: priorityScore,
-        leg_drive_minutes: legDriveMinutes,
-        cumulative_drive_minutes: cumulativeDriveMinutes,
-        cumulative_total_minutes: cumulativeTotalMinutes,
-      };
-    }).sort((a, b) => a.sequence - b.sequence || a.row - b.row);
-
-    if (stops.length > ROUTE_MAX_STOPS) {
-      throw routeProposalError("invalid_route_response", "Ruttjänsten returnerade för många stopp.");
-    }
-
-    stops.forEach((stop, index) => {
-      if (stop.sequence !== index + 1) {
-        throw routeProposalError("invalid_route_response", "Stoppordningen är inte sammanhängande.");
-      }
-      if (index > 0) {
-        const previous = stops[index - 1];
-        if (
-          stop.cumulative_drive_minutes + 0.01 < previous.cumulative_drive_minutes
-          || stop.cumulative_total_minutes + 0.01 < previous.cumulative_total_minutes
-        ) {
-          throw routeProposalError("invalid_route_response", "Ruttens ackumulerade tider är ogiltiga.");
-        }
-      }
-    });
-
-    const summary = {
-      candidate_count: Number(payload.summary.candidate_count),
-      stop_count: Number(payload.summary.stop_count),
-      total_priority_score: Number(payload.summary.total_priority_score),
-      drive_minutes: Number(payload.summary.drive_minutes),
-      return_drive_minutes: Number(payload.summary.return_drive_minutes),
-      service_minutes: Number(payload.summary.service_minutes),
-      break_minutes: Number(payload.summary.break_minutes ?? 0),
-      wait_minutes: Number(payload.summary.wait_minutes ?? 0),
-      return_wait_minutes: Number(payload.summary.return_wait_minutes ?? 0),
-      total_minutes: Number(payload.summary.total_minutes),
-    };
-    if (
-      !Number.isInteger(summary.candidate_count) || summary.candidate_count < 0 || summary.candidate_count > customers.length
-      || !Number.isInteger(summary.stop_count) || summary.stop_count !== stops.length
-      || !Number.isFinite(summary.total_priority_score) || summary.total_priority_score < 0
-      || !Number.isFinite(summary.drive_minutes) || summary.drive_minutes < 0
-      || !Number.isFinite(summary.return_drive_minutes) || summary.return_drive_minutes < 0
-      || summary.return_drive_minutes > summary.drive_minutes + 0.01
-      || !Number.isFinite(summary.service_minutes) || summary.service_minutes < 0
-      || !Number.isFinite(summary.break_minutes) || summary.break_minutes < 0
-      || !Number.isFinite(summary.wait_minutes) || summary.wait_minutes < 0
-      || !Number.isFinite(summary.return_wait_minutes) || summary.return_wait_minutes < 0
-      || !Number.isFinite(summary.total_minutes) || summary.total_minutes < 0
-    ) {
-      throw routeProposalError("invalid_route_response", "Ruttens summering är ogiltig.");
-    }
-
-    const expectedServiceMinutes = stops.length * ROUTE_SERVICE_MINUTES_PER_STOP;
-    const calculatedTotalMinutes = summary.drive_minutes + expectedServiceMinutes
-      + summary.break_minutes + summary.wait_minutes;
-    const calculatedPriorityScore = stops.reduce((sum, stop) => sum + stop.priority_score, 0);
-    if (
-      Math.abs(summary.service_minutes - expectedServiceMinutes) > 0.01
-      || summary.total_minutes > ROUTE_MAX_TOTAL_MINUTES + 0.01
-      || calculatedTotalMinutes > ROUTE_MAX_TOTAL_MINUTES + 0.01
-      || Math.abs(summary.total_minutes - calculatedTotalMinutes) > 1
-      || Math.abs(summary.total_priority_score - calculatedPriorityScore) > 0.1
-      || payload.meta?.includes_return_to_start !== true
-      || Number(payload.meta?.max_route_stops) !== ROUTE_MAX_STOPS
-    ) {
-      throw routeProposalError("invalid_route_response", "Ruttens tids- eller poängvillkor kunde inte verifieras.");
-    }
-
-    if (stops.length) {
-      const lastStop = stops[stops.length - 1];
-      if (
-        Math.abs(
-          lastStop.cumulative_drive_minutes
-          + summary.return_drive_minutes
-          - summary.drive_minutes
-        ) > 1
-        || Math.abs(
-          lastStop.cumulative_total_minutes
-          + summary.return_drive_minutes
-          + summary.return_wait_minutes
-          - summary.total_minutes
-        ) > 1
-      ) {
-        throw routeProposalError("invalid_route_response", "Ruttens stopptider stämmer inte med summeringen.");
-      }
-    }
-
-    return {
-      generatedAt: String(payload.generated_at || ""),
-      routeDate: String(payload.route_date || ""),
-      routeOwner: String(payload.route_owner || ""),
-      cached: payload.cached === true,
-      start: { latitude: start.latitude, longitude: start.longitude },
-      stops,
-      rows: stops.map(stop => stop.row),
-      stopByRow: Object.fromEntries(stops.map(stop => [String(stop.row), stop])),
-      sequenceByRow: Object.fromEntries(stops.map(stop => [String(stop.row), stop.sequence])),
-      summary,
-      meta: payload.meta || {},
-    };
-  }
 
   function getCurrentPositionForRoute() {
     return new Promise((resolve, reject) => {
@@ -5671,122 +5173,6 @@
     return backendMessage || "Kunde inte skapa ruttförslaget. Försök igen.";
   }
 
-  async function proposeRoute() {
-    if (routeProposalLoading) return;
-
-    let context = getRouteProposalContext();
-    if (context.baseCustomers.length < 1) {
-      setRouteProposalMessage(
-        currentUserIsSeller()
-          ? "Du har inga egna butiker att skapa ett ruttförslag för."
-          : "Inga butiker matchar de aktiva filtren.",
-        { canRetry: false }
-      );
-      return;
-    }
-
-    routeProposal = null;
-    resetRouteProposalMapSelection();
-    routeProposalMessage = null;
-    routeProposalLoading = true;
-    routeProposalRequestSignature = context.signature;
-    const requestSerial = ++routeProposalRequestSerial;
-    routeProposalAbortController = typeof AbortController === "function" ? new AbortController() : null;
-    renderRouteProposalPanel();
-
-    try {
-      let payload = null;
-      const savedResponse = await fetch(`${API}/route-proposal`, {
-        method: "GET",
-        signal: routeProposalAbortController?.signal,
-      });
-      const savedPayload = await savedResponse.json().catch(() => ({}));
-      if (savedResponse.ok && savedPayload.ok === true) {
-        payload = savedPayload;
-      } else if (
-        savedResponse.status !== 404
-        || String(savedPayload.code || savedPayload.error) !== "no_daily_route"
-      ) {
-        throw routeProposalError(
-          String(savedPayload.code || savedPayload.error || "route_request_failed"),
-          savedPayload.message,
-          { ...savedPayload, status: savedResponse.status }
-        );
-      }
-      if (requestSerial !== routeProposalRequestSerial) return;
-
-      if (!payload) {
-        if (!insightsLoaded && insightsLoadFailed) {
-          await loadInsights();
-        }
-        if (!insightsLoaded) {
-          throw routeProposalError(
-            "priority_data_unavailable",
-            insightsLoadFailed
-              ? "Kunde inte ladda aktuella kundinsikter. Försök igen."
-              : "Kundinsikterna laddas fortfarande. Försök igen om en stund."
-          );
-        }
-
-        context = getRouteProposalContext();
-        if (context.candidates.length < 1) {
-          throw routeProposalError(
-            "no_eligible_candidates",
-            "Inga tillgängliga butiker har både giltiga koordinater och en prioritetspoäng över noll."
-          );
-        }
-
-        const currentPosition = await getCurrentPositionForRoute();
-        if (requestSerial !== routeProposalRequestSerial) return;
-        const response = await fetch(`${API}/route-proposal`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            start: {
-              latitude: currentPosition.latitude,
-              longitude: currentPosition.longitude,
-            },
-            candidate_rows: context.candidates.map(customer => Number(customer.row)),
-          }),
-          signal: routeProposalAbortController?.signal,
-        });
-        payload = await response.json().catch(() => ({}));
-        if (!response.ok || payload.ok !== true) {
-          throw routeProposalError(
-            String(payload.code || payload.error || "route_request_failed"),
-            payload.message,
-            { ...payload, status: response.status }
-          );
-        }
-      }
-
-      const normalized = normalizeRouteProposalResponse(payload, context);
-      if (normalized.stops.length < 1) {
-        routeProposalLoading = false;
-        routeProposalAbortController = null;
-        routeProposalRequestSignature = "";
-        setRouteProposalMessage("Ingen genomförbar rutt hittades före 17:00 inklusive retur till start.");
-        return;
-      }
-
-      routeProposal = {
-        signature: context.signature,
-        ...normalized,
-      };
-      resetRouteProposalMapSelection();
-      routeProposalMessage = null;
-      routeProposalLoading = false;
-      routeProposalAbortController = null;
-      routeProposalRequestSignature = "";
-      renderList();
-    } catch (error) {
-      if (requestSerial !== routeProposalRequestSerial || error?.name === "AbortError") return;
-      routeProposalLoading = false;
-      routeProposalAbortController = null;
-      routeProposalRequestSignature = "";
-      setRouteProposalMessage(getRouteProposalFailureMessage(error));
-    }
-  }
 
   // ── Render list ──
   function renderList() {
@@ -5835,17 +5221,9 @@
     const visibleCustomers = filtered.slice(0, visibleListCount);
     const remainingCount = Math.max(0, filtered.length - visibleCustomers.length);
     list.innerHTML = insightsErrorHtml + visibleCustomers.map(c => {
-      const routeStop = getRouteProposalStop(c);
-      const routeSummary = routeStop ? `
-        <div class="route-card-summary">
-          <span>${formatRouteMinutes(routeStop.leg_drive_minutes)} körning ${routeStop.sequence === 1 ? "från start" : "från föregående"}</span>
-          <span>${formatRouteMinutes(routeStop.cumulative_total_minutes)} totalt efter stoppet</span>
-        </div>
-      ` : "";
       return `
-        <div class="customer-card ${getPriorityCardClass(c)}" data-row="${c.row}" role="button" tabindex="0" aria-label="${escAttr(getCustomerCardAriaLabel(c, routeStop))}">
+        <div class="customer-card ${getPriorityCardClass(c)}" data-row="${c.row}" role="button" tabindex="0" aria-label="${escAttr(getCustomerCardAriaLabel(c))}">
           <div class="card-top">
-            ${routeStop ? `<div class="route-stop-number" aria-hidden="true">${routeStop.sequence}</div>` : ""}
             <div class="customer-main">
               <div class="customer-name">${esc(c.customer)}</div>
               <div class="customer-sub">${esc(c.city)}</div>
@@ -5854,7 +5232,6 @@
               ${c.customer_segment ? `<span class="segment-badge">${esc(c.customer_segment)}</span>` : ""}
             </div>
           </div>
-          ${routeSummary}
           ${getPrioritySummaryHtml(c)}
           ${getNextActionHtml(c)}
           ${getCardDatesHtml(c)}
@@ -9338,42 +8715,6 @@
     }
   }
 
-  async function importCurrentRouteToPlanning() {
-    const button = document.getElementById("route-proposal-planning-btn");
-    if (!button || button.disabled) return;
-    if (routeMapSelectionDiffersFromProposal()) {
-      showToast("Kartans ändringar måste verifieras i ett nytt ruttförslag först.");
-      renderRouteProposalPanel();
-      return;
-    }
-    if (!planningRouteImportRequestId) planningRouteImportRequestId = planningClientRequestId("planning-route-import");
-    button.disabled = true;
-    const oldText = button.textContent;
-    button.textContent = "Sparar…";
-    try {
-      const result = await planningFetchJson("/planning/route-import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_request_id: planningRouteImportRequestId }),
-      });
-      planningRouteImportRequestId = "";
-      planningData = null;
-      const count = Number(result.imported_count ?? result.activity_count ?? result.activities?.length ?? 0);
-      showToast(count ? `${count} ruttstopp sparades i Planering` : "Rutten sparades i Planering");
-      if (document.getElementById("view-planning").classList.contains("active")) {
-        await refreshWorkflowViews({ planning: true });
-      } else {
-        await refreshWorkflowViews();
-      }
-    } catch (error) {
-      showToast(error.message || "Rutten kunde inte sparas i Planering");
-    } finally {
-      if (document.body.contains(button)) {
-        button.disabled = false;
-        button.textContent = oldText;
-      }
-    }
-  }
 
   document.getElementById("planning-mode-btn").addEventListener("click", () => openPlanningView());
   document.getElementById("planning-back-btn").addEventListener("click", () => showView("list"));
@@ -10006,7 +9347,6 @@
 
   document.getElementById("map-back-btn").addEventListener("click", () => {
     showView(mapReturnView);
-    if (mapReturnView === "list") renderRouteProposalPanel();
   });
 
   document.getElementById("map-gmaps-btn").addEventListener("click", openInGoogleMaps);
@@ -10075,22 +9415,11 @@
     hasStoredRouteOutsideCurrentMap = true;
   }
 
-  function seedRouteProposalMapSelection() {
-    if (!routeProposal || routeProposalMapSeededSignature === routeProposal.signature) return;
-    const stopsByRow = new Map(mapStops.map(stop => [Number(stop.row), stop]));
-    routeInMapStops = routeProposal.rows
-      .map(row => stopsByRow.get(Number(row)))
-      .filter(Boolean);
-    routeProposalMapSeededSignature = routeProposal.signature;
-    hasStoredRouteOutsideCurrentMap = false;
-  }
 
   function clearMapRoute() {
     routeInMapStops = [];
     hasStoredRouteOutsideCurrentMap = false;
-    if (!routeProposal) {
-      try { localStorage.removeItem(MAP_ROUTE_DRAFT_KEY); } catch {}
-    }
+    try { localStorage.removeItem(MAP_ROUTE_DRAFT_KEY); } catch {}
     renderMapMarkers();
     renderMapStopList();
     showToast("Rutten rensad");
@@ -10120,8 +9449,7 @@
       return;
     }
 
-    if (routeProposal) seedRouteProposalMapSelection();
-    else restoreMapRouteDraft();
+    restoreMapRouteDraft();
     showView("map");
     try {
       await initGoogleMap();
@@ -10132,19 +9460,12 @@
     }
     renderMapMarkers();
     const total = customersWithCoordinates.length;
-    if (routeProposal) {
-      document.getElementById("map-subtitle").textContent =
-        `Ruttförslag för ${routeProposal.routeOwner} · ${mapStops.length} butiker · retur till start · justera stoppen nedan`;
-      setMyLocationMarker(routeProposal.start);
-      fitMapToBounds(mapStops, routeProposal.start);
-    } else {
-      document.getElementById("map-subtitle").textContent = total > MAP_LIMIT
-        ? `Visar ${MAP_LIMIT} av ${total} butiker — filtrera för färre`
-        : `${mapStops.length} butik${mapStops.length !== 1 ? "er" : ""}`;
-      fitMapToBounds(mapStops);
-    }
+    document.getElementById("map-subtitle").textContent = total > MAP_LIMIT
+      ? `Visar ${MAP_LIMIT} av ${total} butiker — filtrera för färre`
+      : `${mapStops.length} butik${mapStops.length !== 1 ? "er" : ""}`;
+    fitMapToBounds(mapStops);
     renderMapStopList();
-    if (!routeProposal) showMyLocation();
+    showMyLocation();
   }
 
   function planningVisitStopsForDate(dateKey) {
@@ -10233,7 +9554,7 @@
     myLocationMarker = new google.maps.Marker({
       position: myPosition,
       map: googleMap,
-      title: routeProposal ? "Din position · ruttstart" : "Din position",
+      title: "Din position",
       icon: {
         path: google.maps.SymbolPath.CIRCLE,
         scale: 8,
@@ -10263,8 +9584,7 @@
   }
 
   document.getElementById("map-locate-btn").addEventListener("click", () => {
-    if (routeProposal) setMyLocationMarker(routeProposal.start, true);
-    else showMyLocation(true);
+    showMyLocation(true);
   });
 
   function fitMapToBounds(stops, origin = null) {
@@ -10339,7 +9659,7 @@
     } else {
       routeInMapStops.push(c);
     }
-    if (!routeProposal) saveCurrentMapRouteDraft();
+    saveCurrentMapRouteDraft();
     renderMapMarkers();
     renderMapStopList();
     updateMapRouteBar();
@@ -10377,11 +9697,8 @@
       const routeIdx = effectiveRouteStops.findIndex(r => Number(r.row) === Number(c.row));
       const inRoute  = routeIdx !== -1;
       const ins = getCustomerInsight(c);
-      const routeStop = getRouteProposalStop(c);
       const actionLabel = ins.next_action?.label || "";
-      const priorityLabel = routeStop
-        ? `${formatRouteScore(routeStop.priority_score)} poäng`
-        : mapPriorityValue(ins) !== null
+      const priorityLabel = mapPriorityValue(ins) !== null
         ? `${formatRouteScore(mapPriorityValue(ins))} poäng`
         : "";
       const stopMeta = [c.city, actionLabel, priorityLabel].filter(Boolean).join(" · ");
@@ -10417,10 +9734,8 @@
   function openInGoogleMaps() {
     const stops = routeInMapStops.length > 0 ? routeInMapStops : mapStops;
     if (stops.length < 1) return;
-    const useRouteProposal = mapContext !== "planning" && routeProposal;
-    const returnPoint = useRouteProposal ? getRouteCoordinatePair(routeProposal.start) : null;
-    const dest = returnPoint || getRouteCoordinatePair(stops[stops.length - 1]);
-    const waypoints = useRouteProposal ? stops : stops.slice(0, -1);
+    const dest = getRouteCoordinatePair(stops[stops.length - 1]);
+    const waypoints = stops.slice(0, -1);
     if (!dest) return;
     const destParam = `${dest.latitude},${dest.longitude}`;
     const wpParam   = waypoints.length > 0

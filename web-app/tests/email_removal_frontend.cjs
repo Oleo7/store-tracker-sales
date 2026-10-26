@@ -12,7 +12,7 @@ for (const forbidden of [
 ]) assert.ok(!html.includes(forbidden), forbidden);
 for (const retained of ['mailto:', 'email_last_order', 'Mejl',
   '/planning/activities', '/planning/route-apply', '/contacts',
-  'customerCanExecutePlanned', 'priority_score']) assert.ok(html.includes(retained), retained);
+  'customerCanExecutePlanned', 'getWorkPriorityValue', 'getPrioritySummaryHtml']) assert.ok(html.includes(retained), retained);
 for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) {
   if (match[1].trim()) new vm.Script(match[1]);
 }

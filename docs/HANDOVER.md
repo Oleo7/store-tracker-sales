@@ -62,7 +62,7 @@ testade PR:er, inte under historikradering.
 | Rekonstruktion av historiska scoring-snapshots i `sales_coaching.py` | Gamla kontakter saknar exakt loggad V3.5-snapshot | Definiera ny analyssemantik och migrera eller acceptera saknade historiska snapshots |
 | Kundnamnsbaserade insights-svar och versionsheaders | Bakåtkompatibilitet med äldre klientformat | En kontrollerad API-versionsändring och uppdaterade frontend-/replaytester |
 | `legacy_missed_followup` och äldre triggeralias | Historiska planeringsposter och deras relationer | Utred att inga aktiva beslut längre beror på aliasen |
-| `/route-proposal` och `/planning/route-import` | Äldre HTTP-vägar kan fortfarande anropas även om kalenderns ruttflöde är det aktiva UI:t | Bevisa att inga integrationsklienter använder vägarna, ta bort med riktade tester |
+| `/route-proposal` och `/planning/route-import` | Den gamla frontendens panel och importanrop tas bort i PR4. Backend-API:erna finns ännu kvar som kompatibilitet för eventuella externa klienter; kalenderns aktiva ruttflöde använder andra API:er. | Bevisa att ingen extern klient använder API:erna innan separat backendrensning |
 | `ROUTE_ENGINE=legacy` | **Aktivt namn på lokal ruttmotor**, inte automatiskt död kod | Kräver separat beslut om ruttmotor, inte historikrensning |
 | `route_proposal.py` och `route_proposals` | Delar av logiken/lagringen används av aktuell ruttberäkning, återförsök och idempotens | Granska på funktionsnivå innan någon modul/worksheet tas bort |
 | Avvecklade API-endpoints som returnerar HTTP 410 | Spärrar gamla klienter från att utföra pensionerade mutationer | Beslut att gamla API-kontrakt får försvinna; kontrollera beroende klienter |
@@ -104,6 +104,11 @@ faktiskt ska ha, och därefter göra konfiguration eller modulborttagning.
 - **PR3 (överlämningsrensningen):** oanvända frontend-/backendhjälpare och
   no-op workflow-suppression borttagna; regressionstester och replayverktyg
   anpassade; README och denna överlämningsguide förtydligade.
+- **PR4 (ruttgränssnitt):** den gamla, oåtkomliga ruttförslagspanelen och dess
+  JavaScript/CSS, API-anrop och specialfall i kundlista/karta avvecklas.
+  Manuell Google Maps-rutt, sparat kartutkast, kalenderns ruttförhandsgranskning,
+  GPS, restidsvisning, fallback, ruttsparning, gemensam ruttmotor och
+  `route_proposals`-bladet bevaras. Äldre backend-API:er avvecklas **inte**.
 
 Alla framtida ändringar görs i `Oleo7/store-tracker-sales` och helst en separat
 PR per riskområde. **Ingen automatisk merge eller deployment följer av denna
@@ -115,11 +120,16 @@ guide.**
    beroenden som `ACTIVE`, `HISTORICAL_REQUIRED`, `TEST_ONLY` eller `UNUSED`.
 2. Förenkla gamla API-/datakontrakt en kategori i taget, med regressioner för
    befintlig kopia och en separat, explicit migrationsplan om data behöver ändras.
-3. Ta ställning till produktens omfattning: vilka Polarbär-specifika analyser,
+3. Planera en separat PR för att **helt avveckla `sales_activities.follow_up_date`
+   i `store-tracker-sales`**. Beslutet är fattat för denna nya kodbas, men
+   kolumnen och historikadaptrarna ändras inte i rutt-PR4. Det ursprungliga
+   Polarbär-systemet ligger utanför scope. Kontrollera beroenden i prioritering,
+   analys, kalender och kontaktregistrering innan borttagning.
+4. Ta ställning till produktens omfattning: vilka Polarbär-specifika analyser,
    produktfält och integrationer ska bli valbara eller tas bort?
-4. Dela senare `app.py` och `index.html` i mindre moduler **utan att samtidigt**
+5. Dela senare `app.py` och `index.html` i mindre moduler **utan att samtidigt**
    ändra affärsregler, ruttalgoritm eller datalagring.
-5. Separat inför eventuell driftsättning: välj egen testmiljö, granska
+6. Separat inför eventuell driftsättning: välj egen testmiljö, granska
    Google-behörigheter, secrets, datamodell, skrivrutiner och Render-konfiguration.
    Den nuvarande överlämningen behöver inget av detta.
 

@@ -120,55 +120,13 @@ run().catch(error => { console.error(error); process.exitCode = 1; });
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     @skipUnless(shutil.which("node"), "Node.js required for real frontend helpers")
-    def test_legacy_route_normalizer_accounts_for_lunch_and_waiting(self):
-        script = r'''
-const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
-const html = fs.readFileSync(process.argv[1], 'utf8');
-const source = name => {
-  const start = html.indexOf(`  function ${name}(`);
-  assert.ok(start >= 0, name);
-  return html.slice(start, html.indexOf('\n  }', start) + 4);
-};
-const constants = ['ROUTE_MAX_TOTAL_MINUTES', 'ROUTE_MAX_STOPS', 'ROUTE_SERVICE_MINUTES_PER_STOP']
-  .map(name => html.match(new RegExp(`const ${name} = [^;]+;`))[0]).join('\n');
-const context = vm.createContext({assert});
-vm.runInContext(`${constants}
-const customers = [{row:2,customer:'Store A'},{row:3,customer:'Store B'}];
-${['parseRouteCoordinate','getRouteCoordinatePair','customerInsightKey','routeProposalError',
-   'normalizeRouteProposalResponse'].map(source).join('\n')}`, context);
-vm.runInContext(`
-const stop = (row, sequence, drive, cumulativeDrive, cumulativeTotal) => ({
-  row, sequence, customer: row === 2 ? 'Store A' : 'Store B', latitude:57.7, longitude:11.9,
-  priority_score:80, leg_drive_minutes:drive, cumulative_drive_minutes:cumulativeDrive,
-  cumulative_total_minutes:cumulativeTotal,
-});
-const payload = {
-  ok:true, start:{latitude:57.7,longitude:11.9},
-  stops:[stop(2,1,40,40,60),stop(3,2,20,60,300)],
-  summary:{candidate_count:2,stop_count:2,total_priority_score:160,drive_minutes:90,
-    return_drive_minutes:30,service_minutes:40,break_minutes:45,wait_minutes:155,
-    return_wait_minutes:0,total_minutes:330},
-  meta:{includes_return_to_start:true,max_route_stops:15},
-};
-assert.equal(normalizeRouteProposalResponse(payload, {}).summary.total_minutes,330);
-const earlyReturn = {...payload,stops:[stop(2,1,40,40,60)],
-  summary:{...payload.summary,stop_count:1,total_priority_score:80,drive_minutes:70,
-    service_minutes:20,total_minutes:285,wait_minutes:150,return_wait_minutes:195}};
-assert.equal(normalizeRouteProposalResponse(earlyReturn, {}).summary.break_minutes,45);
-const afterLunch = {...earlyReturn,summary:{...earlyReturn.summary,total_minutes:90,
-  break_minutes:0,wait_minutes:0,return_wait_minutes:0}};
-assert.equal(normalizeRouteProposalResponse(afterLunch, {}).summary.total_minutes,90);
-for (const changes of [{total_minutes:550},{break_minutes:-1},{wait_minutes:0},
-                       {return_wait_minutes:20}]) {
-  assert.throws(() => normalizeRouteProposalResponse({...payload,
-    summary:{...payload.summary,...changes}}, {}), error => error.code === 'invalid_route_response');
-}
-`, context);
-'''
-        result = subprocess.run(
-            ["node", "-e", script, str(INDEX_PATH)], capture_output=True, text=True, timeout=20,
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+    def test_retired_route_normalizer_is_removed_but_current_preview_remains(self):
+        self.assertNotIn("function normalizeRouteProposalResponse(", self.html)
+        self.assertNotIn("async function proposeRoute(", self.html)
+        self.assertNotIn('fetch(`${API}/route-proposal`', self.html)
+        self.assertIn("async function openPlanningRoutePreview()", self.html)
+        self.assertIn("function renderPlanningRoutePreview(preview)", self.html)
+        self.assertIn("function restoreMapRouteDraft()", self.html)
 
     def test_contact_log_uses_the_three_supported_channels(self):
         match = re.search(
@@ -324,7 +282,7 @@ const googleMap = null;
 const customers = [{row:2,customer:'Test store',city:'Test city'}];
 let lastListSignature = '', visibleListCount = 10, filteredCustomers = [];
 const LIST_BATCH_SIZE = 10, getListSignature = () => 'test-list';
-const getBaseFilteredCustomers = () => customers, getRouteProposalStop = () => null;
+const getBaseFilteredCustomers = () => customers;
 const isCancelledCustomer = () => false, currentUserCanPlan = () => true;
 const listWorkFilter='all', PLANNING_TIME_ZONE='Europe/Stockholm';
 let simulateListScrollJump = false;
@@ -1151,7 +1109,9 @@ vm.runInContext(`(async () => {
             'id="planning-route-preview-btn" type="button">Skapa ruttförslag</button>',
             self.html,
         )
-        self.assertIn("LEGACY ROLLBACK SUPPORT", self.html)
+        self.assertNotIn("LEGACY ROLLBACK SUPPORT", self.html)
+        self.assertNotIn("route-proposal-panel", self.html)
+        self.assertNotIn("function seedRouteProposalMapSelection()", self.html)
 
     def test_planning_error_preserves_admin_owner_and_backend_message(self):
         self.assertIn(
@@ -1273,7 +1233,7 @@ vm.runInContext(`(async () => {
         )
         mapper = self.html.split(
             "function getRouteProposalFailureMessage", 1
-        )[1].split("async function proposeRoute", 1)[0]
+        )[1].split("\n  }", 1)[0]
         self.assertIn('normalizedCode === "route_traffic_infeasible"', mapper)
         self.assertIn(expected, mapper)
 
@@ -1361,6 +1321,9 @@ vm.runInContext(`(async () => {
         for role in ("säljare", "saljare", "account manager", "accountmanager"):
             self.assertIn(f'"{role}"', seller_check.group(1))
 
-    def test_adjusted_map_route_cannot_silently_import_original_stops(self):
-        self.assertIn("function routeMapSelectionDiffersFromProposal", self.html)
-        self.assertIn("Kartans stopp har ändrats", self.html)
+    def test_old_route_import_removed_and_current_map_and_calendar_stay_active(self):
+        self.assertNotIn("function routeMapSelectionDiffersFromProposal()", self.html)
+        self.assertNotIn('planningFetchJson("/planning/route-import"', self.html)
+        self.assertIn("restoreMapRouteDraft();", self.html)
+        self.assertIn("saveCurrentMapRouteDraft();", self.html)
+        self.assertIn('planningFetchJson("/planning/route-apply", {', self.html)

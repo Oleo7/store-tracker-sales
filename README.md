@@ -14,8 +14,10 @@ Det här repot förbereds för överlämning till en utvecklarkollega. Det är *
 inställningar och integrationer är Polarbär-specifika.
 
 PR1 tog bort automatiska mejlförslag/Brevo. PR2 tog bort verifierat död kod.
-Den påföljande överlämningsrensningen tar bort ytterligare oanvända hjälpare och
-inaktiva workflow-adaptrar utan att migrera befintlig data.
+PR3 rensar inaktiva workflow-adaptrar och dokumenterar överlämningen. PR4 tar
+bort det oåtkomliga gamla ruttgränssnittet från frontend, men behåller både
+kalenderns aktiva ruttplanering och dess delade hjälpfunktioner. Ingen av dessa
+rensningar migrerar befintliga kund- eller ruttdata.
 
 **Ingen ny Render-miljö, ny Google Sheet eller driftsättning krävs för att granska
 och vidareutveckla repositoryt.** Det befintliga `render.yaml` är kvar som
