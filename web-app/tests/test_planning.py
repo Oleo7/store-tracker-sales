@@ -1139,7 +1139,7 @@ class PlanningActivityApiTests(PlanningApiTestCase):
         self.assertEqual(stale_retry.get_json()["error"], "planning_changed")
         self.assertEqual(self.planning_rows()[0]["note"], "Version B")
 
-    def test_followup_create_retry_repairs_legacy_date_mirror(self):
+    def test_followup_create_and_retry_never_mirror_contact_date(self):
         self.append_contact_row()
         contact_sheet = self.spreadsheet.worksheet("sales_activities")
         contact_sheet.fail_next_batch_update = RuntimeError(
@@ -1155,20 +1155,15 @@ class PlanningActivityApiTests(PlanningApiTestCase):
         partial = self.client.post("/planning/activities", json=payload)
         repaired = self.client.post("/planning/activities", json=payload)
 
-        self.assertEqual(partial.status_code, 503, partial.get_json())
-        self.assertEqual(
-            partial.get_json()["error"],
-            "follow_up_mirror_failed",
-        )
+        self.assertEqual(partial.status_code, 201, partial.get_json())
         self.assertEqual(repaired.status_code, 200, repaired.get_json())
         self.assertTrue(repaired.get_json()["duplicate"])
         self.assertEqual(len(self.planning_rows()), 1)
-        self.assertEqual(
-            self.contact_rows()[0]["follow_up_date"],
-            "2026-08-01",
-        )
+        self.assertEqual(self.planning_rows()[0]["scheduled_at"], "2026-08-01T10:00+02:00")
+        self.assertNotIn("follow_up_date", self.contact_rows()[0])
+        self.assertIsNotNone(contact_sheet.fail_next_batch_update)
 
-    def test_followup_patch_retry_repairs_legacy_date_mirror(self):
+    def test_followup_patch_and_retry_never_mirror_contact_date(self):
         self.append_contact_row()
         seeded = self.append_planning_row(
             planned_activity_id="followup-patch-repair",
@@ -1194,17 +1189,12 @@ class PlanningActivityApiTests(PlanningApiTestCase):
             json=payload,
         )
 
-        self.assertEqual(partial.status_code, 503, partial.get_json())
-        self.assertEqual(
-            partial.get_json()["error"],
-            "follow_up_mirror_failed",
-        )
+        self.assertEqual(partial.status_code, 200, partial.get_json())
         self.assertEqual(repaired.status_code, 200, repaired.get_json())
         self.assertTrue(repaired.get_json()["duplicate"])
-        self.assertEqual(
-            self.contact_rows()[0]["follow_up_date"],
-            "2026-08-02",
-        )
+        self.assertEqual(self.planning_rows()[0]["scheduled_at"], "2026-08-02T11:00+02:00")
+        self.assertNotIn("follow_up_date", self.contact_rows()[0])
+        self.assertIsNotNone(contact_sheet.fail_next_batch_update)
 
 
     def test_customer_id_wins_over_tampered_row_cache(self):
@@ -2031,7 +2021,7 @@ class PlanningContactCompletionTests(PlanningApiTestCase):
         self.assertEqual(followup["source_contact_id"], contact["contact_id"])
         self.assertEqual(followup["contact_type"], "visit")
         self.assertEqual(followup["scheduled_at"], "2026-08-01T10:30+02:00")
-        self.assertEqual(contact["follow_up_date"], "2026-08-01")
+        self.assertNotIn("follow_up_date", contact)
 
     def test_booked_visit_completion_preserves_flag_and_creates_booked_followup(self):
         for followup_type in ("visit", "phone", "email"):
