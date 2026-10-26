@@ -19,32 +19,14 @@ class CustomerNextFollowUpTests(PlanningApiTestCase):
         self.assertEqual(response.status_code, 200, response.get_json())
         return response.get_json()
 
-    def test_earliest_open_promise_survives_other_contact_and_future_event(self):
+    def test_old_contact_date_does_not_create_next_followup(self):
         self.append_contact_row(
-            contact_id="same-day-earlier",
+            contact_id="date-only-source",
             customer_id="11111111-1111-4111-8111-111111111111",
             date_time="2026-07-27 08:00",
             follow_up_date="2026-08-01",
         )
-        self.append_contact_row(
-            contact_id="same-day-latest",
-            customer_id="11111111-1111-4111-8111-111111111111",
-            date_time="2026-07-27 16:00",
-            follow_up_date="2026-08-05",
-        )
-
-        payload = self.get_stats()
-
-        self.assertEqual(payload["contacts"][0]["follow_up_date"], "2026-08-01")
-        self.assertEqual({key: payload["next_follow_up"][key] for key in (
-            "source", "date", "time", "contact_type", "contact_type_label", "contact_id")}, {
-            "source": "latest_contact",
-            "date": "2026-08-01",
-            "time": "",
-            "contact_type": "",
-            "contact_type_label": "",
-            "contact_id": "same-day-earlier",
-        })
+        self.assertIsNone(self.get_stats()["next_follow_up"])
 
     def test_earliest_future_planned_activity_is_selected_once(self):
         self.append_contact_row(
@@ -100,22 +82,19 @@ class CustomerNextFollowUpTests(PlanningApiTestCase):
             "planned_activity_id": "future-earliest",
         })
 
-    def test_later_planned_activity_replaces_earlier_internal_date(self):
+    def test_calendar_activity_is_the_only_future_followup(self):
         self.append_contact_row(
-            contact_id="legacy-earlier",
+            contact_id="ignored-date",
             customer_id="11111111-1111-4111-8111-111111111111",
-            date_time="2026-07-27 09:00",
-            follow_up_date="2026-07-28",
+            date_time="2026-07-27 09:00", follow_up_date="2026-07-28",
         )
         self.append_planning_row(
             planned_activity_id="planned-later",
             scheduled_at="2026-07-29T09:00:00+02:00",
         )
-
         payload = self.get_stats()
-
-        self.assertEqual(payload["next_follow_up"]["source"], "latest_contact")
-        self.assertEqual(payload["next_follow_up"]["date"], "2026-07-28")
+        self.assertEqual(payload["next_follow_up"]["source"], "planned_activity")
+        self.assertEqual(payload["next_follow_up"]["date"], "2026-07-29")
 
     def test_past_legacy_follow_up_is_not_selected(self):
         self.append_contact_row(
