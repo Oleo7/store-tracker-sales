@@ -1,5 +1,12 @@
 # Ruttförslag: backendkonfiguration
 
+> **Historisk dokumentation.** Detta beskriver den äldre klientstyrda
+> `/route-proposal`-funktionen. Det frontendflödet har avvecklats i PR4.
+> Den aktiva ruttplaneringen utgår från kalendern och använder
+> `/planning/route-preview` och `/planning/route-apply`. Underliggande
+> ruttmotor och `route_proposals`-lagring finns kvar och delas med den aktiva
+> planeringen. Följ inte dessa äldre instruktioner för en ny installation.
+
 Den autentiserade endpointen `POST /route-proposal` använder aktuell
 serverberäknad prioritetspoäng och Google Routes API för riktade körtider.
 Klientens tidsvärden ignoreras. Backend kräver alltid en total tid under
