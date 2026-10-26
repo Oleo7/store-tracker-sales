@@ -186,9 +186,12 @@ for(const width of (process.env.CUSTOMER_DETAIL_WIDTH?[Number(process.env.CUSTOM
  assert.equal(await page.locator('[data-customer-decision]').count(),0);
  await planning(page);
  assert.equal(await page.locator('[data-attention-action="review"]').count(),0);
- // Sixty-two legacy follow-ups belong to one customer row, grouped before pagination.
+ // Sixty-two genuine overdue calendar activities belong to one customer, grouped before pagination.
  const promise=page.locator('#planning-backlog .planning-attention-item').filter({has:page.locator('.planning-backlog-customer',{hasText:'QA Löfte'})});
  assert.equal(await promise.count(),1);assert.match(await promise.innerText(),/äldre missade/);
+ // Retained historical dates in sales_activities must not create virtual work.
+ const legacyOnly=page.locator('#planning-backlog .planning-attention-item').filter({has:page.locator('.planning-backlog-customer',{hasText:'QA Kontaktbesked'})});
+ assert.equal(await legacyOnly.count(),0);
  await promise.locator('[data-attention-action="log"]').click();
  await page.locator('#view-form.active').waitFor();
  for(const id of ['f-obligation-field','f-obligation-outcome','f-permission-fields','f-followup-agreement'])assert.equal(await page.locator('#'+id).count(),0);
@@ -199,7 +202,7 @@ for(const width of (process.env.CUSTOMER_DETAIL_WIDTH?[Number(process.env.CUSTOM
  await page.waitForFunction(()=>!document.getElementById('view-form').classList.contains('active')&&!planningAttentionLoading);
  await page.waitForFunction(()=>!planningAttention.items.some(i=>i.customer==='QA Löfte'));
  const evidence=await snap(page);const logged=evidence.contacts.filter(c=>c.customer==='QA Löfte'&&c.comment==='Syntetiskt verkligt kontaktförsök');assert.equal(logged.length,1);
- // An old valid service follow-up uses the same skip action without creating a contact.
+ // A genuine overdue calendar follow-up uses the same skip action without creating a contact.
  const old=page.locator('#planning-backlog .planning-attention-item').filter({has:page.locator('.planning-backlog-customer',{hasText:'QA Granska'})});
  await old.locator('[data-attention-action="skip"]').click();await page.waitForFunction(()=>!planningAttention.items.some(i=>i.customer==='QA Granska'));
  const skipped=await snap(page);assert.equal(skipped.contacts.length,evidence.contacts.length);
@@ -220,7 +223,7 @@ for(const width of (process.env.CUSTOMER_DETAIL_WIDTH?[Number(process.env.CUSTOM
  assert.deepEqual(errors,[]);
  const overflow=await page.evaluate(()=>Array.from(document.querySelectorAll('.view.active .customer-card,.view.active .planning-attention-item')).filter(e=>e.scrollWidth>e.clientWidth+1).map(e=>e.className));assert.deepEqual(overflow,[]);
  if(process.env.VALUE_PRIORITY_SCREENSHOT_DIR){fs.mkdirSync(process.env.VALUE_PRIORITY_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.VALUE_PRIORITY_SCREENSHOT_DIR,`activity-loop-${width}.png`),fullPage:true});}
- console.log(`${width}px: one score, no case menus, grouped legacy work, actual unreachable attempt, skip without contact, booking fields and logging during wait PASS`);
+ console.log(`${width}px: one score, no case menus, grouped calendar work, legacy date ignored, actual unreachable attempt, skip without contact, booking fields and logging during wait PASS`);
  await context.close();
 }
 }finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1);});
