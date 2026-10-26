@@ -93,11 +93,6 @@ def confirmed(value):
     return key(value) in {"true", "y", "yes", "1", "ja"}
 
 
-def commitment_evidence(source, activity):
-    """Legacy metadata never creates a separate operational lifecycle."""
-    return ("planned_task" if activity else "internal_reminder"), False
-
-
 def obligation_id_for_contact(row):
     return "followup:" + stable_contact_source_id(row)
 

@@ -1883,54 +1883,6 @@ class PlanningContactCompletionTests(PlanningApiTestCase):
              for status in ("completed", "cancelled", "skipped", "superseded")},
         )
 
-    def test_no_later_human_contact_leaves_plan_open(self):
-        self.append_planning_row(
-            planned_activity_id="unresolved-plan",
-            scheduled_at="2026-07-26T09:00:00+02:00",
-        )
-        self.append_contact_row(
-            customer_id="11111111-1111-4111-8111-111111111111",
-            date_time="2026-07-25 10:00",
-        )
-        self.assertEqual(
-            app_module.reconcile_superseded_planned_activities(
-                self.spreadsheet, self.contact_rows(), apply=True
-            ),
-            [],
-        )
-        self.assertEqual(self.planning_rows()[0]["status"], "planned")
-
-    def test_reconciliation_ignores_email_and_unrelated_human_contact(self):
-        self.append_planning_row(
-            planned_activity_id="email-only-plan",
-            scheduled_at="2026-07-26T09:00:00+02:00",
-        )
-        self.append_contact_row(
-            customer_id="11111111-1111-4111-8111-111111111111",
-            date_time="2026-07-27 10:00",
-            activity_source="crm_email",
-        )
-        self.assertEqual(
-            app_module.reconcile_superseded_planned_activities(
-                self.spreadsheet, self.contact_rows(), apply=True
-            ), [],
-        )
-        self.append_contact_row(
-            customer_id="11111111-1111-4111-8111-111111111111",
-            date_time="2026-07-27 10:01",
-            contact_id="human-later",
-        )
-        self.assertEqual(
-            app_module.reconcile_superseded_planned_activities(
-                self.spreadsheet, self.contact_rows(), apply=True
-            ), [],
-        )
-        self.assertEqual(
-            app_module.reconcile_superseded_planned_activities(
-                self.spreadsheet, self.contact_rows(), apply=True
-            ), [],
-        )
-
     def test_direct_auto_link_replay_is_idempotent(self):
         activity = self.append_planning_row(
             planned_activity_id="direct-auto-replay", contact_type="phone"

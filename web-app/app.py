@@ -83,7 +83,6 @@ from customer_obligations import (
     build_customer_state, attention_items, stable_contact_source_id,
     obligation_id_for_activity, obligation_id_for_contact,
     latest_state_events, event_payload, event_revision,
-    commitment_evidence,
 )
 from contact_channel import recommend_contact_channel
 from geocoding import geocode_address
@@ -120,7 +119,6 @@ from route_optimization import (
     RouteOptimizationProvider,
     TrustedCoordinate,
     build_input_fingerprint as build_route_optimization_input_fingerprint,
-    build_legacy_ro_v1_request_fingerprint,
     build_optimize_tours_request,
     build_request_fingerprint as build_route_optimization_fingerprint,
     coordinate_quality as route_coordinate_quality,
@@ -1332,15 +1330,6 @@ def write_planned_activity_snapshot(spreadsheet):
             expected_columns=PLANNED_ACTIVITY_COLUMNS,
         )
         return sheet, headers, rows
-
-
-def superseded_planned_activity_candidates(activity_rows, contact_rows):
-    """Supersession is a read projection; preserve persisted history."""
-    return []
-
-
-def reconcile_superseded_planned_activities(spreadsheet, contact_rows, *, apply=False):
-    return []
 
 
 def get_saved_route_proposal(spreadsheet, user_name, route_date):
@@ -4308,15 +4297,6 @@ def public_unplanned_contact(row, row_index):
         ).strip(),
         "unplanned": True,
     }
-
-
-def legacy_followup_identity(row):
-    return "|".join([
-        str(row.get("customer_id") or "").strip(),
-        normalize_key(row.get("customer")),
-        str(parse_date_value(row.get("follow_up_date")) or ""),
-        normalize_key(row.get("comment")),
-    ])
 
 
 def build_unscheduled_followup_groups(*, indexed_contacts, activities, customers,
