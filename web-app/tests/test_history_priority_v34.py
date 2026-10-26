@@ -178,5 +178,3 @@ class TimestampAndIdentityRegressionTests(TestCase):
         self.assertFalse(row['has_planned_contact'])
         self.assertFalse(row['can_start_unscheduled_contact'])
         self.assertEqual(row['work_priority_raw'],0)
-
-
