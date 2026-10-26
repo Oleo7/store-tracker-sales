@@ -5,8 +5,10 @@ from zoneinfo import ZoneInfo
 from itertools import permutations
 from pathlib import Path
 import random
+import shutil
+import subprocess
 import sys
-from unittest import TestCase, main
+from unittest import TestCase, main, skipUnless
 from unittest.mock import patch
 
 import requests
@@ -1061,6 +1063,61 @@ class FrontendRouteProposalFlowTests(TestCase):
         self.assertIn("saveCurrentMapRouteDraft();", self.html)
         self.assertIn("return routeInMapStops;", self.html)
         self.assertNotIn("seedRouteProposalMapSelection", self.html)
+
+    @skipUnless(shutil.which("node"), "Node.js required for manual map regression")
+    def test_manual_map_draft_and_google_maps_export_runtime(self):
+        """Exercise shipped map helpers without the retired route proposal state."""
+        script = r'''
+const fs = require("node:fs"), vm = require("node:vm"), assert = require("node:assert/strict");
+const html = fs.readFileSync(process.argv[1], "utf8");
+const source = name => {
+  const start = html.indexOf("  function " + name + "(");
+  assert.ok(start >= 0, name);
+  const end = html.indexOf("\n  }", start);
+  assert.ok(end > start, name);
+  return html.slice(start, end + 4);
+};
+const environment = [
+  'const MAP_ROUTE_DRAFT_KEY = "test-map-route";',
+  'const MAP_ROUTE_DRAFT_TTL_MS = 12 * 60 * 60 * 1000;',
+  'let routeInMapStops = []; let hasStoredRouteOutsideCurrentMap = false;',
+  'const mapStops = [{row:2,latitude:57.7,longitude:11.9}, {row:3,latitude:57.8,longitude:11.8}];',
+  'const data = new Map();',
+  'const localStorage = {getItem:k=>data.get(k)||null, setItem:(k,v)=>data.set(k,v), removeItem:k=>data.delete(k)};',
+  'const openCalls = [];',
+  'const window = {open:(url,target)=>openCalls.push({url,target})};',
+  'const getRouteCoordinatePair = x => x ? {latitude:x.latitude,longitude:x.longitude} : null;',
+  'const renderMapMarkers = () => {}, renderMapStopList = () => {}, showToast = () => {};',
+].join("\n");
+const names = [
+  "getRouteDraftRows", "loadMapRouteDraft", "saveCurrentMapRouteDraft",
+  "restoreMapRouteDraft", "clearMapRoute", "getEffectiveMapRouteStops",
+  "openInGoogleMaps",
+];
+const context = vm.createContext({assert, Map, Date, JSON});
+vm.runInContext(environment + "\n" + names.map(source).join("\n"), context);
+vm.runInContext([
+  'routeInMapStops = [mapStops[1],mapStops[0]];',
+  'saveCurrentMapRouteDraft();',
+  'assert.equal(JSON.parse(localStorage.getItem(MAP_ROUTE_DRAFT_KEY)).rows.join(","),"3,2");',
+  'routeInMapStops = [];',
+  'restoreMapRouteDraft();',
+  'assert.equal(getEffectiveMapRouteStops().map(x=>x.row).join(","),"3,2");',
+  'openInGoogleMaps();',
+  'assert.equal(openCalls.length,1);',
+  'assert.ok(openCalls[0].url.includes("destination=57.7,11.9"));',
+  'assert.ok(openCalls[0].url.includes("waypoints=57.8,11.8"));',
+  'clearMapRoute();',
+  'assert.equal(routeInMapStops.length,0);',
+  'assert.equal(localStorage.getItem(MAP_ROUTE_DRAFT_KEY),null);',
+  'assert.equal(hasStoredRouteOutsideCurrentMap,false);',
+].join("\n"), context);
+'''
+        result = subprocess.run(
+            ["node", "-e", script, str(WEB_APP_DIR / "index.html")],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_route_proposal_uses_the_standard_map_controls(self):
         self.assertIn(
