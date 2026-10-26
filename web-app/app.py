@@ -612,7 +612,7 @@ CONTACT_LOG_COLUMNS = [
 ]
 
 CONTACT_COLUMNS = ["date_time", "sales_person", "customer", "customer_id", "contact_channel", "result",
-                   "comment", "customer_contact_person", 
+                   "comment", "customer_contact_person",
                    *FREEZER_COLUMNS, "email_id", "contact_id", "planned_activity_id",
                    *CONTACT_ANALYTICS_COLUMNS, "obligation_id", "obligation_outcome", "purpose",
                    "contact_request_fingerprint", "recorded_at", "follow_up_purpose", "follow_up_agreement_confirmed", "onboarding_completed"]
