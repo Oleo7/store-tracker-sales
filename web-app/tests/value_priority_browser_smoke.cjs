@@ -149,11 +149,12 @@ async function customerDetailUi(page,width){
   overflow:document.documentElement.scrollWidth>window.innerWidth,
  }));
  assert.equal(sections.overflow,false);
- if(width>=1180){assert.deepEqual(sections.left,['d-note-section','d-contact-info-section','d-contact-section']);assert.deepEqual(sections.right,['d-order-section','d-latest-section','d-email-tracking-section']);}
- else assert.deepEqual(sections.direct,['d-overview-section','d-note-section','d-order-section','d-contact-info-section','d-latest-section','d-contact-section','d-email-tracking-section']);
+ if(width>=1180){assert.deepEqual(sections.left,['d-note-section','d-contact-info-section','d-contact-section']);assert.deepEqual(sections.right,['d-order-section','d-latest-section']);}
+ else assert.deepEqual(sections.direct,['d-overview-section','d-note-section','d-order-section','d-contact-info-section','d-latest-section','d-contact-section']);
  await page.locator('#contact-edit-btn').click();await page.locator('#edit-phone').fill('0709999999');
  if(width===1280){
   await page.setViewportSize({width:390,height:900});
+  await page.waitForFunction(()=>document.getElementById('d-order-section').parentElement.className==='detail-body');
   assert.equal(await page.locator('#d-order-section').evaluate(e=>e.parentElement.className),'detail-body');
   assert.equal(await page.locator('#edit-phone').inputValue(),'0709999999');
   await page.setViewportSize({width,height:900});
@@ -161,7 +162,7 @@ async function customerDetailUi(page,width){
   assert.equal(await page.locator('#edit-phone').inputValue(),'0709999999');
  }
  await page.locator('#contact-cancel-btn').click();
- for(const id of ['update-contact-btn','d-plan-btn','d-call-btn','d-mail-btn','d-reminder-btn'])assert.equal(await page.locator('#'+id).isEnabled(),true,id);
+ for(const id of ['update-contact-btn','d-plan-btn','d-call-btn','d-mail-btn'])assert.equal(await page.locator('#'+id).isEnabled(),true,id);
  if(process.env.VALUE_PRIORITY_SCREENSHOT_DIR){await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:path.join(process.env.VALUE_PRIORITY_SCREENSHOT_DIR,`customer-detail-${width}.png`),fullPage:true});}
  await page.locator('#update-contact-btn').click();await page.locator('#view-form.active').waitFor();await page.locator('#form-cancel-btn').click();
  await page.evaluate(()=>openDetail(603));assert.equal(await details.getAttribute('open'),null);

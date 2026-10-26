@@ -532,10 +532,6 @@
     .detail-action-bar .action-btn.secondary {
       border-color: #1a1a2e;
     }
-    .detail-action-bar #d-reminder-btn {
-      flex: 1 0 100%;
-      width: 100%;
-    }
 
     .detail-section {
       background: #fff;
@@ -790,17 +786,6 @@
       padding: 8px 0 0;
       cursor: pointer;
       text-align: center;
-    }
-    .email-tracking-recipient {
-      padding: 10px 0;
-      border-top: 1px solid #f0f2f5;
-    }
-    .email-tracking-recipient:first-child { border-top: none; }
-    .email-tracking-address {
-      margin-bottom: 4px;
-      font-size: 0.84rem;
-      font-weight: 700;
-      overflow-wrap: anywhere;
     }
 
     .action-btn {
@@ -1479,54 +1464,6 @@
     }
     .insights-kpi-delta.positive { color: #14804a; }
     .insights-kpi-delta.negative { color: #c0392b; }
-    .email-report-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
-      gap: 9px;
-    }
-    .email-report-card {
-      min-width: 0;
-      border: 1px solid #eef0f5;
-      border-radius: 11px;
-      padding: 11px;
-      background: #fff;
-    }
-    .email-report-card.intent {
-      background: linear-gradient(180deg, #fff5fa, #fff);
-      border-color: #f2d9e5;
-    }
-    .email-report-value {
-      color: #1a1a2e;
-      font-size: 1.42rem;
-      font-weight: 900;
-      line-height: 1.05;
-      overflow-wrap: anywhere;
-    }
-    .email-report-label {
-      margin-top: 5px;
-      color: #35313a;
-      font-size: 0.76rem;
-      font-weight: 820;
-    }
-    .email-report-meta {
-      margin-top: 3px;
-      color: #777;
-      font-size: 0.7rem;
-      font-weight: 650;
-      line-height: 1.35;
-    }
-    .email-report-secondary,
-    .email-report-note {
-      color: #777;
-      font-size: 0.72rem;
-      line-height: 1.45;
-    }
-    .email-report-secondary {
-      margin-top: 10px;
-      padding-top: 9px;
-      border-top: 1px solid #f0e8ee;
-    }
-    .email-report-note { margin-top: 5px; }
     .chart-card {
       border: 1px solid #eef0f5;
       border-radius: 12px;
@@ -2705,182 +2642,8 @@
       color: var(--pb-muted); background: var(--pb-pink-soft);
       cursor: pointer; font: inherit; font-weight: 700;
     }
-    .email-modal-backdrop {
-      position: fixed; inset: 0; z-index: 210; display: none;
-      background: rgba(37,28,37,0.62); backdrop-filter: blur(3px);
-      padding: 18px; overflow-y: auto;
-    }
-    .email-modal-backdrop.open { display: flex; align-items: flex-start; justify-content: center; }
-    .email-modal {
-      width: min(760px, 100%); margin: auto; background: var(--pb-surface);
-      border-radius: 18px; box-shadow: 0 26px 70px rgba(20,10,20,0.28); overflow: hidden;
-    }
-    .email-modal-header {
-      display: flex; align-items: flex-start; gap: 12px; padding: 20px 22px 16px;
-      color: #fff; background: linear-gradient(135deg, var(--pb-ink), #593846);
-    }
-    .email-modal-heading { flex: 1; min-width: 0; }
-    .email-modal-heading h2 { font-size: 1.18rem; margin-bottom: 4px; }
-    .email-modal-heading p { color: rgba(255,255,255,.7); font-size: .8rem; }
-    .email-close {
-      width: 34px; height: 34px; border: 0; border-radius: 50%;
-      background: rgba(255,255,255,.14); color: #fff; font-size: 1.05rem; cursor: pointer;
-    }
-    .email-modal-body { padding: 20px 22px 8px; }
-    .email-banner {
-      display: none; margin-bottom: 12px; padding: 11px 13px;
-      border-radius: 10px; font-size: .82rem; line-height: 1.45;
-    }
-    .email-banner.visible { display: block; }
-    .email-banner.test { background: #fff0d6; color: #724700; border: 1px solid #f4cf8e; }
-    .email-banner.warning { background: #fff4e9; color: #7a3f16; border: 1px solid #efc29d; }
-    .email-banner.notice { background: var(--pb-blue-soft); color: #274968; border: 1px solid #c3d5eb; }
-    .email-field { margin-bottom: 16px; }
-    .email-field > label, .email-section-label {
-      display: block; margin-bottom: 6px; color: var(--pb-muted); font-size: .72rem;
-      font-weight: 800; letter-spacing: .045em; text-transform: uppercase;
-    }
-    .email-field input, .email-field textarea, .email-order-row input {
-      width: 100%; border: 1px solid var(--pb-border-strong); border-radius: 10px;
-      padding: 11px 12px; color: var(--pb-ink); background: #fff; resize: vertical;
-    }
-    .email-field textarea { min-height: 104px; line-height: 1.45; }
-    .email-recipient-list { display: grid; gap: 9px; }
-    .email-recipient {
-      display: grid; grid-template-columns: auto minmax(0, 1.35fr) minmax(120px, .8fr);
-      align-items: center; gap: 9px; padding: 10px; border: 1px solid var(--pb-border);
-      border-radius: 11px; background: var(--pb-surface-soft);
-    }
-    .email-recipient.blocked { background: #fff0f0; border-color: #efb6b6; }
-    .email-recipient input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--pb-pink-strong); }
-    .email-recipient-address { min-width: 0; overflow-wrap: anywhere; font-size: .86rem; }
-    .email-recipient-address small { display: block; margin-top: 3px; color: #a03b3b; }
-    .email-recipient-name {
-      width: 100%; border: 1px solid var(--pb-border-strong); border-radius: 8px; padding: 8px 9px;
-    }
-    .email-order-list { display: grid; gap: 8px; }
-    .email-order-row {
-      display: grid; grid-template-columns: minmax(0, 1fr) 86px 70px 34px;
-      gap: 7px; align-items: center;
-    }
-    .email-order-row .email-order-remove {
-      width: 34px; height: 36px; border: 1px solid var(--pb-border); border-radius: 9px;
-      background: #fff; color: var(--pb-muted); cursor: pointer;
-    }
-    .email-add-row {
-      margin-top: 8px; border: 0; color: var(--pb-pink-strong);
-      background: transparent; font-weight: 800; cursor: pointer;
-    }
-    .email-product-picker {
-      display: none; margin-top: 8px; padding: 10px; gap: 7px; flex-wrap: wrap;
-      border: 1px solid var(--pb-border); border-radius: 10px; background: var(--pb-surface-soft);
-    }
-    .email-product-picker.open { display: flex; }
-    .email-product-option {
-      border: 1px solid var(--pb-border-strong); border-radius: 999px; padding: 7px 10px;
-      color: var(--pb-ink); background: #fff; cursor: pointer; font: inherit; font-size: .76rem;
-    }
-    .email-product-option:hover { border-color: var(--pb-pink-strong); color: var(--pb-pink-strong); }
-    .email-product-picker-empty { color: var(--pb-muted); font-size: .76rem; }
-    .email-protected {
-      margin: 18px 0 10px; padding: 14px; border: 1px dashed var(--pb-border-strong);
-      border-radius: 12px; background: #faf7f9; color: var(--pb-muted);
-      font-size: .84rem; line-height: 1.55;
-    }
-    .email-protected-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 14px; }
-    .email-protected-button { padding: 9px 11px; border-radius: 8px; color: #fff; background: var(--pb-ink); font-weight: 700; }
-    .email-signature { white-space: pre-line; color: var(--pb-ink); }
-    .email-modal-footer {
-      position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 9px;
-      padding: 14px 22px 18px; background: rgba(255,255,255,.96); border-top: 1px solid var(--pb-border);
-    }
-    .email-modal-footer .action-btn { margin: 0; width: auto; }
-    .email-modal-loading { padding: 42px 20px; text-align: center; color: var(--pb-muted); }
-    .settings-body {
-      width: 100%; max-width: 1600px; margin: 0 auto; padding: 18px clamp(14px, 2vw, 28px) 110px;
-    }
-    .settings-intro {
-      margin-bottom: 16px; padding: 17px 18px; border: 1px solid var(--pb-border);
-      border-radius: 16px; background: var(--pb-surface);
-      box-shadow: var(--pb-shadow-soft);
-    }
-    .settings-intro h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--pb-ink); }
-    .settings-intro p { margin: 0; color: var(--pb-muted); font-size: .84rem; line-height: 1.5; }
-    .settings-template-tabs {
-      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px;
-      margin-bottom: 14px;
-    }
-    .settings-template-tab {
-      border: 1px solid var(--pb-border-strong); border-radius: 12px; padding: 12px 10px;
-      background: #fff; color: var(--pb-ink); cursor: pointer; font: inherit; font-weight: 800;
-    }
-    .settings-template-tab.active {
-      border-color: var(--pb-pink-strong); color: var(--pb-pink-strong);
-      background: var(--pb-pink-soft);
-    }
-    .settings-editor-card {
-      overflow: hidden; border: 1px solid var(--pb-border); border-radius: 17px;
-      background: var(--pb-surface); box-shadow: var(--pb-shadow-soft);
-    }
-    .settings-editor-heading {
-      padding: 18px 20px; color: #fff;
-      background: linear-gradient(135deg, var(--pb-ink), #593846);
-    }
-    .settings-editor-heading h2 { margin: 0 0 4px; font-size: 1.08rem; }
-    .settings-editor-heading p { margin: 0; color: rgba(255,255,255,.72); font-size: .78rem; }
-    .settings-editor-content { padding: 18px 20px 6px; }
-    .settings-placeholder-help {
-      margin: 0 0 16px; padding: 11px 12px; border-radius: 10px;
-      color: #274968; background: var(--pb-blue-soft); border: 1px solid #c3d5eb;
-      font-size: .78rem; line-height: 1.55;
-    }
-    .settings-placeholder-help code {
-      color: var(--pb-ink); background: rgba(255,255,255,.7); border-radius: 5px;
-      padding: 1px 4px; font-size: .74rem;
-    }
-    .settings-cta-grid {
-      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
-    }
-    .settings-order-mode {
-      margin-bottom: 12px; padding: 12px; border: 1px solid var(--pb-border);
-      border-radius: 11px; background: var(--pb-surface-soft);
-    }
-    .settings-order-mode label { display: flex; align-items: center; gap: 8px; font-size: .84rem; }
-    .settings-order-mode select {
-      flex: 1; min-width: 0; border: 1px solid var(--pb-border-strong);
-      border-radius: 8px; padding: 8px 9px; background: #fff;
-    }
-    .settings-order-row {
-      display: grid; grid-template-columns: minmax(0, 1fr) 86px 70px 34px;
-      gap: 8px; align-items: center; margin-bottom: 8px;
-    }
-    .settings-order-row input {
-      width: 100%; border: 1px solid var(--pb-border-strong); border-radius: 10px;
-      padding: 10px 11px; color: var(--pb-ink); background: #fff;
-    }
-    .settings-order-remove {
-      width: 34px; height: 34px; border: 1px solid var(--pb-border);
-      border-radius: 9px; color: var(--pb-muted); background: #fff; cursor: pointer;
-    }
-    .settings-save-bar {
-      display: flex; justify-content: flex-end; gap: 9px; padding: 14px 20px 18px;
-      border-top: 1px solid var(--pb-border); background: rgba(255,255,255,.96);
-    }
-    .settings-save-bar .action-btn { width: auto; margin: 0; }
     @media (max-width: 620px) {
-      .email-modal-backdrop { padding: 0; }
-      .email-modal { min-height: 100%; border-radius: 0; }
-      .email-modal-body { padding: 16px 14px 6px; }
-      .email-modal-header, .email-modal-footer { padding-left: 14px; padding-right: 14px; }
-      .email-recipient { grid-template-columns: auto minmax(0, 1fr); }
-      .email-recipient-name { grid-column: 2; }
-      .email-order-row { grid-template-columns: minmax(0, 1fr) 70px 34px; }
-      .email-order-unit { display: none; }
       .session-control span { display: none; }
-      .settings-template-tabs { grid-template-columns: 1fr; }
-      .settings-cta-grid { grid-template-columns: 1fr; gap: 0; }
-      .settings-order-row { grid-template-columns: minmax(0, 1fr) 72px 34px; }
-      .settings-order-unit { display: none; }
     }
 
     /* ── Sales planning ── */
@@ -3906,7 +3669,7 @@
 <div class="toast" id="toast"></div>
 <div class="session-control" id="session-control">
   <span id="session-user-name"></span>
-  <button id="settings-btn" type="button">Inställningar</button>
+
 </div>
 
 <!-- ═══════════════ LIST VIEW ═══════════════ -->
@@ -3939,8 +3702,8 @@
       <button class="chip" id="chip-risk">Risk</button>
       <button class="chip" id="chip-latest-contact">Senast kontakt</button>
       <button class="chip" id="chip-delivery">Senast Leverans</button>
-      <button class="chip" id="chip-email-proposal">Mejl-förslag</button>
-      <button class="chip" id="chip-email-click-no-order" aria-pressed="false">Klickat – ingen order</button>
+
+
     </div>
     <div id="clear-filters-row" style="display:none">
       <button class="chip chip-clear" id="clear-filters-btn">✕ Rensa filter</button>
@@ -4052,18 +3815,7 @@
       </div>
     </div>
 
-    <div class="insights-panel" id="email-performance-panel">
-      <div class="panel-heading">
-        <div>
-          <div class="insights-panel-title">Mejlutfall</div>
-          <p class="panel-subtitle">Klick och order väger tyngst</p>
-        </div>
-        <span class="panel-badge" id="email-performance-period">Liveutskick</span>
-      </div>
-      <div id="email-performance-report" aria-live="polite">
-        <div class="state-msg">Laddar...</div>
-      </div>
-    </div>
+
     <div class="insights-session-footer">
       <span id="insights-session-user-name"></span>
       <button id="logout-btn" type="button">Logga ut</button>
@@ -4207,7 +3959,7 @@
       <button class="action-btn secondary" id="d-plan-btn">Planera kontakt</button>
       <button class="action-btn secondary" id="d-call-btn">Ring</button>
       <button class="action-btn secondary" id="d-mail-btn">Email</button>
-      <button class="action-btn secondary" id="d-reminder-btn">Mejlförslag</button>
+
     </div>
 
     <!-- Översikt -->
@@ -4339,10 +4091,6 @@
       <button class="show-more-btn" id="d-show-more" style="display:none">Visa fler ›</button>
     </div>
 
-    <div class="detail-section" id="d-email-tracking-section" style="display:none">
-      <div class="detail-section-title">Senaste mejlförslaget</div>
-      <div id="d-email-tracking-list"></div>
-    </div>
 
     <div class="detail-column" id="d-left-column"></div>
     <div class="detail-column" id="d-right-column"></div>
@@ -4489,30 +4237,6 @@
 </div>
 
 
-<!-- ═══════════════ SETTINGS VIEW ═══════════════ -->
-<div class="view" id="view-settings">
-  <div class="header">
-    <button class="back-btn" id="settings-back-btn" aria-label="Tillbaka">&#8592;</button>
-    <div class="header-text">
-      <h1>Inställningar</h1>
-      <p>Standardmallar för mejlförslag</p>
-    </div>
-  </div>
-  <div class="settings-body">
-    <section class="settings-intro">
-      <h2>Mejlförslag</h2>
-      <p>Välj kundrelation och justera det utkast som nya kundmejl ska utgå från. Ändringar påverkar nya utkast för alla säljare.</p>
-    </section>
-    <div class="settings-template-tabs" id="settings-template-tabs">
-      <button class="settings-template-tab active" type="button" data-email-type="reminder">Påminnelse</button>
-      <button class="settings-template-tab" type="button" data-email-type="reactivation">Återaktivering</button>
-      <button class="settings-template-tab" type="button" data-email-type="new_customer">Nykund</button>
-    </div>
-    <section class="settings-editor-card" id="settings-editor-card">
-      <div class="email-modal-loading">Laddar mejlmallar…</div>
-    </section>
-  </div>
-</div>
 
 
 <!-- ═══════════════ MAP VIEW ═══════════════ -->
@@ -4537,21 +4261,7 @@
 </div>
 
 
-<!-- ═══════════════ EMAIL PROPOSAL MODAL ═══════════════ -->
-<div class="email-modal-backdrop" id="email-modal-backdrop" aria-hidden="true">
-  <section class="email-modal" role="dialog" aria-modal="true" aria-labelledby="email-modal-title">
-    <div class="email-modal-header">
-      <div class="email-modal-heading">
-        <h2 id="email-modal-title">Mejlförslag</h2>
-        <p id="email-modal-subtitle"></p>
-      </div>
-      <button class="email-close" id="email-modal-close" type="button" aria-label="Stäng">✕</button>
-    </div>
-    <div id="email-modal-content">
-      <div class="email-modal-loading">Laddar personligt utkast…</div>
-    </div>
-  </section>
-</div>
+
 
 <!-- ═══════════════ PLANNING DIALOG ═══════════════ -->
 <div class="planning-modal-backdrop" id="planning-modal-backdrop" aria-hidden="true">
@@ -4622,7 +4332,7 @@
   let contactClientRequestId = "";
   let contactRetryPayload = null;
   let insights = {};
-  let emailClickNoOrderActive = false;
+
   let insightsLoaded = false;
   let insightsLoadFailed = false;
   let insightsLoadMessage = "";
@@ -4815,7 +4525,7 @@
   }
 
   // ── Multi-select filter state ──
-  const filterState = { segment: new Set(), city: new Set(), region: new Set(), focus: new Set(), risk: new Set(), delivery: new Set(), latestContact: new Set(), emailProposal: new Set() };
+  const filterState = { segment: new Set(), city: new Set(), region: new Set(), focus: new Set(), risk: new Set(), delivery: new Set(), latestContact: new Set(),  };
 
   async function loadInsights({
     render = true,
@@ -4849,8 +4559,8 @@
       insightsLoadMessage = "";
       insightsRevision += 1;
       buildInsightDropdowns();
-      updateEmailClickNoOrderChip();
-      updateChip("emailProposal");
+
+
       if (render || activeViewName() === "list") {
         const scrollX = window.scrollX;
         const scrollY = window.scrollY;
@@ -4885,10 +4595,8 @@
         ? "Prioriteringsmodellen är tillfälligt avstängd. Kundlistan finns kvar utan poäng. Prioritetsfiltren används när modellen är tillgänglig igen."
         : "Kundprioriteringen kunde inte laddas. Listan visas utan prioritetspoäng.";
       insightsRevision += 1;
-      emailClickNoOrderActive = false;
-      filterState.emailProposal.clear();
-      updateEmailClickNoOrderChip();
-      updateChip("emailProposal");
+
+
       showToast("Kunde inte ladda kundprioritering");
       renderList();
       if (typeof currentCustomer !== "undefined" && currentCustomer && activeViewName() === "detail") renderCustomerDecisionDetail(currentCustomer);
@@ -4918,7 +4626,7 @@
     risk:        "Risk",
     delivery:    "Senast Leverans",
     latestContact: "Senast kontakt",
-    emailProposal: "Mejl-förslag",
+
   };
   const _chipIds = {
     status:      "chip-status",
@@ -4929,7 +4637,7 @@
     risk:        "chip-risk",
     delivery:    "chip-delivery",
     latestContact: "chip-latest-contact",
-    emailProposal: "chip-email-proposal",
+
   };
   const FOCUS_KEYS_BY_LABEL = {
     "Återaktivering": "reactivation", "Återköp": "repeat_purchase",
@@ -4943,7 +4651,7 @@
     if (key === "status") return STATUS_KEYS_BY_LABEL[label];
     return key === "focus" ? FOCUS_KEYS_BY_LABEL[label] : label;
   }
-  const _sheetValues = { segment: [], city: [], region: [], focus: FOCUS_LABELS.slice(), risk: [], delivery: [], latestContact: ["<1 månad", "1-2 månader", ">3 månader", "Saknar kontakt"], emailProposal: ["Påminnelse", "Återaktivering", "Nykund"] };
+  const _sheetValues = { segment: [], city: [], region: [], focus: FOCUS_LABELS.slice(), risk: [], delivery: [], latestContact: ["<1 månad", "1-2 månader", ">3 månader", "Saknar kontakt"],  };
 
   // ── Filter modal ──
   const _customerFieldMap = {
@@ -4955,7 +4663,8 @@
   function getAvailableValues(key) {
     if (key === "status") return Object.keys(STATUS_KEYS_BY_LABEL);
     // Insight-based filters are not cascaded
-    if (key === "focus" || key === "risk" || key === "delivery" || key === "latestContact" || key === "emailProposal") return _sheetValues[key];
+    if (["focus", "risk", "delivery", "latestContact"].includes(key)) return _sheetValues[key];
+
     // Apply all active filters except the one being opened
     let base = customers;
     for (const [k, field] of Object.entries(_customerFieldMap)) {
@@ -5021,10 +4730,7 @@
 
   Object.keys(_chipIds).forEach(key => {
     document.getElementById(_chipIds[key]).addEventListener("click", () => {
-      if (key === "emailProposal" && !insightsLoaded) {
-        showToast("Laddar kundinsikter – försök igen om en sekund");
-        return;
-      }
+
       openFilterModal(key);
     });
   });
@@ -5039,7 +4745,7 @@
     updateChip("risk");
     updateChip("delivery");
     updateChip("latestContact");
-    updateChip("emailProposal");
+
   }
 
   function buildDropdowns() {
@@ -5101,29 +4807,6 @@
     return `<span class="tag ${tagClass}"${styleAttr}>${esc(risk)}</span>`;
   }
 
-  function getEmailProposalBadgeHtml(insight, style = "") {
-    const label = insight?.email_proposal_type_label;
-    if (!label) return "";
-    const tagClass = {
-      "Påminnelse": "tag-blue",
-      "Återaktivering": "tag-orange",
-      "Nykund": "tag-green",
-    }[label] || "tag-blue";
-    const styleAttr = style ? ` style="${style}"` : "";
-    return `<span class="tag ${tagClass}"${styleAttr}>${esc(label)}</span>`;
-  }
-
-  function getEmailEngagementBadgeHtml(insight, style = "") {
-    const status = insight?.email_followup_status;
-    const config = {
-      ordered_within_10_days: ["Order inom 10 dagar", "tag-green"],
-      stockfiller_clicked_no_order: ["Stockfiller klickat · ingen order", "tag-orange"],
-      product_sheet_clicked_no_order: ["Produktblad klickat · ingen order", "tag-blue"],
-    }[status];
-    if (!config) return "";
-    const styleAttr = style ? ` style="${style}"` : "";
-    return `<span class="tag ${config[1]}"${styleAttr}>${esc(config[0])}</span>`;
-  }
 
   function customerInsightKey(value) {
     return String(value || "").replace(/\u00a0/g, " ").trim().toLowerCase().replace(/\s+/g, " ");
@@ -5392,7 +5075,7 @@
     if (!customer) return;
     renderDetailTags(customer);
     const canStart = customerCanStartContact(customer);
-    for (const id of ["d-call-btn", "d-mail-btn", "d-reminder-btn"]) {
+    for (const id of ["d-call-btn", "d-mail-btn", ]) {
       const button = document.getElementById(id);
       if (!button) continue;
       const hasContact = id === "d-call-btn" ? Boolean(customer.phone) : id === "d-mail-btn" ? Boolean(button.dataset.mailto) : true;
@@ -5420,12 +5103,11 @@
   }
 
 
-
   function getListSignature() {
     return [
       searchQuery,
       `work-filter:${listWorkFilter}`,
-      emailClickNoOrderActive ? "email-click-no-order:1" : "email-click-no-order:0",
+
       ...Object.keys(filterState).sort().map(key => `${key}:${[...filterState[key]].sort().join("|")}`),
     ].join(";");
   }
@@ -5452,39 +5134,20 @@
     updateClearBtn();
   }
 
-  function updateEmailClickNoOrderChip() {
-    const chip = document.getElementById("chip-email-click-no-order");
-    if (!chip) return;
-    chip.textContent = "Klickat – ingen order";
-    chip.classList.toggle("active", emailClickNoOrderActive);
-    chip.setAttribute("aria-pressed", String(emailClickNoOrderActive));
-  }
 
   function updateClearBtn() {
-    const anyActive = listWorkFilter !== "all" || emailClickNoOrderActive || Object.values(filterState).some(s => s.size > 0);
+    const anyActive = listWorkFilter !== "all" || Object.values(filterState).some(s => s.size > 0);
     document.getElementById("clear-filters-row").style.display = anyActive ? "block" : "none";
   }
 
-  document.getElementById("chip-email-click-no-order").addEventListener("click", () => {
-    if (!insightsLoaded) {
-      showToast("Laddar kundinsikter – försök igen om en sekund");
-      return;
-    }
-    emailClickNoOrderActive = !emailClickNoOrderActive;
-    updateEmailClickNoOrderChip();
-    updateClearBtn();
-    renderList();
-  });
 
   document.getElementById("clear-filters-btn").addEventListener("click", () => {
-    Object.keys(filterState).forEach(key => filterState[key].clear());
-    listWorkFilter = "all";
-    emailClickNoOrderActive = false;
-    Object.keys(_chipIds).forEach(key => updateChip(key));
-    updateEmailClickNoOrderChip();
-    document.getElementById("clear-filters-row").style.display = "none";
-    renderList();
-  });
+  Object.keys(filterState).forEach(key => filterState[key].clear());
+  listWorkFilter = "all";
+  Object.keys(_chipIds).forEach(key => updateChip(key));
+  document.getElementById("clear-filters-row").style.display = "none";
+  renderList();
+});
 
   function getFilteredCustomers({ includeStatus = true } = {}) {
     const q = searchQuery.toLowerCase();
@@ -5511,18 +5174,6 @@
       filterState.latestContact.has(getLatestContactBucket(c.latest_contact_date))
     );
 
-    if (!modelUnavailable && filterState.emailProposal.size) {
-      filtered = filtered
-        .filter(c => {
-          const ins = getCustomerInsight(c);
-          return Number(ins?.email_proposal_recipient_count || 0) > 0
-            && filterState.emailProposal.has(ins?.email_proposal_type_label || "");
-        });
-    }
-
-    if (!modelUnavailable && emailClickNoOrderActive) {
-      filtered = filtered.filter(c => Boolean(getCustomerInsight(c)?.email_click_without_order));
-    }
 
     if (includeStatus && listWorkFilter !== "all") filtered = filtered.filter(c => getCustomerWorkState(c) === listWorkFilter);
 
@@ -6238,8 +5889,8 @@
     const baseFilteredCustomers = getBaseFilteredCustomers();
     const filtered = baseFilteredCustomers;
     const activeViews = [];
-    if (filterState.emailProposal.size) activeViews.push("Mejl-förslag");
-    if (emailClickNoOrderActive) activeViews.push("Klickat – ingen order");
+
+
     if (activeViews.length) {
       document.getElementById("subtitle").textContent = `${activeViews.join(" + ")}: ${filtered.length} matchande butiker`;
     } else {
@@ -6367,39 +6018,6 @@
     return [date, time, type].filter(Boolean).join(" · ");
   }
 
-  function emailTrackingDateHtml(value) {
-    const label = timelineDate(value);
-    if (label === "—") return "—";
-    const dateTime = String(value || "").trim().replace(" ", "T");
-    return `<time datetime="${escAttr(dateTime)}">${esc(label)}</time>`;
-  }
-
-  function renderLatestEmailTracking() {
-    const section = document.getElementById("d-email-tracking-section");
-    const list = document.getElementById("d-email-tracking-list");
-    const latestEmail = allTimeline.find(item =>
-      item.event_type === "email_proposal_sent"
-      && Array.isArray(item.recipient_tracking)
-      && item.recipient_tracking.length > 0
-    );
-    const recipients = latestEmail?.recipient_tracking || [];
-
-    if (recipients.length === 0) {
-      section.style.display = "none";
-      list.innerHTML = "";
-      return;
-    }
-
-    list.innerHTML = recipients.map(recipient => `
-      <div class="email-tracking-recipient">
-        <div class="email-tracking-address">${esc(recipient.email) || "Mottagare"}</div>
-        <div class="activity-row"><span class="activity-label">Mejl öppnat</span><span class="activity-value">${emailTrackingDateHtml(recipient.last_opened_at)}</span></div>
-        <div class="activity-row"><span class="activity-label">Klickat produktblad</span><span class="activity-value">${emailTrackingDateHtml(recipient.product_sheet_last_clicked_at)}</span></div>
-        <div class="activity-row"><span class="activity-label">Klickat Stockfiller</span><span class="activity-value">${emailTrackingDateHtml(recipient.stockfiller_last_clicked_at)}</span></div>
-      </div>
-    `).join("");
-    section.style.display = "block";
-  }
 
   function renderContactList(contacts, timeline, nextFollowUp = null) {
     allContacts = contacts || [];
@@ -6415,7 +6033,7 @@
     if (latestTimelineIndex < 0) latestTimelineIndex = 0;
     historyExpanded = false;
     renderHistory();
-    renderLatestEmailTracking();
+
 
     // Senaste aktivitet i den gemensamma tidslinjen
     const latestSection = document.getElementById("d-latest-section");
@@ -6467,10 +6085,10 @@
   const detailDesktopMedia = window.matchMedia("(min-width: 1180px)");
   function arrangeCustomerDetail() {
     const left = document.getElementById("d-left-column"), right = document.getElementById("d-right-column");
-    const mobile = ["d-note-section", "d-order-section", "d-contact-info-section", "d-latest-section", "d-contact-section", "d-email-tracking-section"];
+    const mobile = ["d-note-section", "d-order-section", "d-contact-info-section", "d-latest-section", "d-contact-section", ];
     if (detailDesktopMedia.matches) {
       ["d-note-section", "d-contact-info-section", "d-contact-section"].forEach(id => left.append(document.getElementById(id)));
-      ["d-order-section", "d-latest-section", "d-email-tracking-section"].forEach(id => right.append(document.getElementById(id)));
+      ["d-order-section", "d-latest-section"].forEach(id => right.append(document.getElementById(id)));
     } else {
       mobile.forEach(id => left.parentElement.insertBefore(document.getElementById(id), left));
     }
@@ -6672,600 +6290,13 @@
     );
   }
 
-  const emailModalBackdrop = document.getElementById("email-modal-backdrop");
-  const emailModalContent = document.getElementById("email-modal-content");
-  let reminderDraft = null;
-  let reminderPlanningContext = null;
-  let reminderRetryPayload = null;
-  let reminderDirty = false;
-  let reminderSending = false;
 
-  function markReminderDirty() { reminderDirty = true; }
 
-  function closeReminderModal(force = false) {
-    if (reminderSending && !force) return;
-    if (!force && reminderRetryPayload && !window.confirm("Mejlet är skickat men kalenderstatus återstår att spara. Vill du stänga utan att försöka spara kalenderstatus igen?")) return;
-    if (!force && reminderDirty && !window.confirm("Du har ändringar som inte är skickade. Vill du stänga ändå?")) return;
-    emailModalBackdrop.classList.remove("open");
-    emailModalBackdrop.setAttribute("aria-hidden", "true");
-    document.body.style.overflow = "";
-    reminderDraft = null;
-    reminderPlanningContext = null;
-    reminderRetryPayload = null;
-    reminderDirty = false;
-  }
-
-  function signatureText(signature) {
-    return [signature?.name, signature?.role, signature?.phone ? `📞 ${signature.phone}` : "", "🌐 polarbär.se"]
-      .filter(Boolean).join("\n");
-  }
-
-  function renderReminderOrderRows(rows) {
-    const list = document.getElementById("email-order-list");
-    if (!list) return;
-    list.innerHTML = (rows || []).map((row, index) => `
-      <div class="email-order-row" data-index="${index}">
-        <input class="email-order-product" type="text" value="${escAttr(row.product || "")}" aria-label="Produkt" placeholder="Produkt" />
-        <input class="email-order-quantity" type="text" value="${escAttr(row.quantity || "")}" aria-label="Antal" placeholder="Antal" />
-        <input class="email-order-unit" type="text" value="${escAttr(row.unit || "DFP")}" aria-label="Enhet" placeholder="DFP" />
-        <button class="email-order-remove" type="button" aria-label="Ta bort rad">✕</button>
-      </div>
-    `).join("");
-    list.querySelectorAll("input").forEach(input => input.addEventListener("input", markReminderDirty));
-    list.querySelectorAll(".email-order-remove").forEach(button => button.addEventListener("click", () => {
-      button.closest(".email-order-row").remove();
-      markReminderDirty();
-      renderProductPicker();
-    }));
-  }
-
-  function renderProductPicker() {
-    const picker = document.getElementById("email-product-picker");
-    if (!picker || !reminderDraft) return;
-    const used = new Set(collectReminderOrderRows().map(row => row.product.toLocaleLowerCase("sv-SE")));
-    const available = (reminderDraft.product_catalog || [])
-      .map((item, index) => ({ item, index }))
-      .filter(({ item }) => !used.has(String(item.product || "").trim().toLocaleLowerCase("sv-SE")));
-    picker.innerHTML = available.length
-      ? available.map(({ item, index }) => `<button class="email-product-option" type="button" data-catalog-index="${index}">${esc(item.product || "")}</button>`).join("")
-      : '<span class="email-product-picker-empty">Alla artiklar är redan tillagda.</span>';
-  }
-
-  function renderReminderDraft(draft) {
-    const warnings = (draft.warnings || []).map(item => item.message).filter(Boolean);
-    const notices = draft.notices || [];
-    const recipients = draft.recipients || [];
-    const productButton = draft.links?.product_sheet_url
-      ? `<span class="email-protected-button">${esc(draft.cta_labels?.product_sheet || "Se sortiment och priser")}</span>` : "";
-    const stockfillerButton = draft.links?.stockfiller_url
-      ? `<span class="email-protected-button">${esc(draft.cta_labels?.stockfiller || "Beställ i Stockfiller")}</span>` : "";
-    document.getElementById("email-modal-title").textContent = `Mejlförslag · ${draft.email_type_label || ""}`.trim();
-    document.getElementById("email-modal-subtitle").textContent = draft.customer?.customer || "";
-    emailModalContent.innerHTML = `
-      <div class="email-modal-body">
-        ${reminderPlanningContext ? `<div class="email-banner notice visible">Bokat mejl · ${esc(planningFormatDate(planningDateKeyFromIso(reminderPlanningContext.scheduled_at), {year: true}))} kl. ${esc(planningTimeFromIso(reminderPlanningContext.scheduled_at))}. Ett underliggande uppföljningslöfte avslutas först när du uttryckligen markerar uppgiften utförd.</div>` : ""}
-        <div class="email-banner test ${draft.send_mode !== "live" ? "visible" : ""}">
-          Testläge: separata testmejl skickas till ${esc(draft.test_recipient || "testmottagaren")}. Avsedd mottagare skrivs i ämnesraden.
-        </div>
-        <div class="email-banner notice visible"><strong>${esc(draft.email_type_label || "Mejlförslag")}</strong> · ${esc(draft.relationship?.days_since_delivery != null ? `${draft.relationship.days_since_delivery} dagar sedan senaste leverans` : draft.email_type === "new_customer" ? "Ingen tidigare order" : "Tidigare kund")}</div>
-        <div class="email-banner warning ${warnings.length ? "visible" : ""}">${warnings.map(esc).join("<br>")}</div>
-        <div class="email-banner notice ${notices.length ? "visible" : ""}">${notices.map(esc).join("<br>")}</div>
-        <div class="email-field">
-          <span class="email-section-label">Mottagare och hälsningsnamn</span>
-          <div class="email-recipient-list">
-            ${recipients.map((recipient, index) => {
-              const blockedText = recipient.blocked_reason || (!recipient.valid ? "Ogiltig e-postadress" : "");
-              const disabled = Boolean(blockedText);
-              return `<label class="email-recipient ${disabled ? "blocked" : ""}">
-                <input class="email-recipient-selected" type="checkbox" data-index="${index}" ${recipient.selected ? "checked" : ""} ${disabled ? "disabled" : ""} />
-                <span class="email-recipient-address">${esc(recipient.email)}${blockedText ? `<small>${esc(blockedText)}</small>` : ""}</span>
-                <input class="email-recipient-name" data-index="${index}" type="text" value="${escAttr(recipient.greeting_name || "")}" placeholder="Förnamn (valfritt)" ${disabled ? "disabled" : ""} />
-              </label>`;
-            }).join("") || '<div class="email-banner warning visible">Ingen e-postadress finns på kunden.</div>'}
-          </div>
-        </div>
-        <div class="email-field">
-          <label for="email-subject">Ämne</label>
-          <input id="email-subject" type="text" maxlength="250" value="${escAttr(draft.subject || "")}" />
-        </div>
-        <div class="email-field">
-          <label for="email-intro">Brödtext (** är fetstilt)</label>
-          <textarea id="email-intro" maxlength="5000">${esc(draft.intro_text || "")}</textarea>
-        </div>
-        <div class="email-field">
-          <span class="email-section-label">Föreslagen beställning</span>
-          <div class="email-order-list" id="email-order-list"></div>
-          <button class="email-add-row" id="email-add-row" type="button">+ Lägg till produktrad</button>
-          <div class="email-product-picker" id="email-product-picker"></div>
-        </div>
-        <div class="email-field">
-          <label for="email-closing">Avslutning</label>
-          <textarea id="email-closing" maxlength="5000">${esc(draft.closing_text || "")}</textarea>
-        </div>
-        <div class="email-protected">
-          <div class="email-protected-buttons">${stockfillerButton}${productButton}</div>
-          <div class="email-signature">${esc(signatureText(draft.signature))}</div>
-        </div>
-        <div class="email-banner warning" id="email-send-error" role="alert"></div>
-      </div>
-      <div class="email-modal-footer">
-        <button class="action-btn secondary" id="email-cancel" type="button">Avbryt</button>
-        <button class="action-btn secondary" id="email-reset" type="button">Återställ</button>
-        <button class="action-btn" id="email-send" type="button" ${draft.customer?.cancelled ? "disabled" : ""}>${draft.send_mode === "live" ? "Skicka mejl" : "Skicka test"}</button>
-      </div>`;
-
-    renderReminderOrderRows(draft.order_rows || []);
-    emailModalContent.querySelectorAll("#email-subject, #email-intro, #email-closing, .email-recipient-selected, .email-recipient-name")
-      .forEach(element => element.addEventListener("input", markReminderDirty));
-    document.getElementById("email-add-row").addEventListener("click", () => {
-      const picker = document.getElementById("email-product-picker");
-      renderProductPicker();
-      picker.classList.toggle("open");
-    });
-    document.getElementById("email-product-picker").addEventListener("click", event => {
-      const option = event.target.closest(".email-product-option");
-      if (!option) return;
-      const product = reminderDraft.product_catalog?.[Number(option.dataset.catalogIndex)];
-      if (!product) return;
-      const rows = collectReminderOrderRows();
-      rows.push({ product: product.product, quantity: "1", unit: product.unit || "DFP" });
-      renderReminderOrderRows(rows);
-      document.getElementById("email-product-picker").classList.remove("open");
-      markReminderDirty();
-    });
-    document.getElementById("email-cancel").addEventListener("click", () => closeReminderModal());
-    document.getElementById("email-reset").addEventListener("click", () => {
-      if (!reminderDirty || window.confirm("Återställa alla ändringar i utkastet?")) {
-        renderReminderDraft(reminderDraft);
-        reminderDirty = false;
-      }
-    });
-    document.getElementById("email-send").addEventListener("click", () => sendReminderEmail(false));
-  }
-
-  function collectReminderOrderRows() {
-    return Array.from(document.querySelectorAll("#email-order-list .email-order-row")).map(row => ({
-      product: row.querySelector(".email-order-product")?.value.trim() || "",
-      quantity: row.querySelector(".email-order-quantity")?.value.trim() || "",
-      unit: row.querySelector(".email-order-unit")?.value.trim() || "DFP",
-    })).filter(row => row.product);
-  }
-
-  function collectReminderPayload(confirmWarnings) {
-    return {
-      ...(reminderPlanningContext ? {
-        planned_activity_id: reminderPlanningContext.planned_activity_id,
-        expected_planned_activity_revision: reminderPlanningContext.expected_planned_activity_revision,
-        obligation_id: reminderPlanningContext.obligation_id,
-        expected_obligation_revision: reminderPlanningContext.expected_obligation_revision,
-      } : {}),
-      draft_id: reminderDraft.draft_id,
-      email_type: reminderDraft.email_type,
-      created_at: reminderDraft.created_at,
-      latest_order_reference: reminderDraft.latest_order_reference,
-      subject: document.getElementById("email-subject").value.trim(),
-      intro_text: document.getElementById("email-intro").value.trim(),
-      closing_text: document.getElementById("email-closing").value.trim(),
-      order_rows: collectReminderOrderRows(),
-      links: reminderDraft.links,
-      confirm_warnings: confirmWarnings,
-      recipients: reminderDraft.recipients.map((recipient, index) => ({
-        email: recipient.email,
-        selected: Boolean(document.querySelector(`.email-recipient-selected[data-index="${index}"]`)?.checked),
-        greeting_name: document.querySelector(`.email-recipient-name[data-index="${index}"]`)?.value.trim() || "",
-      })),
-    };
-  }
-
-  function reminderErrorMessage(error, serverMessage = "") {
-    if (error === "email_contact_blocked") return `${serverMessage || "Kundens aktuella åtgärd tillåter inte detta mejl."} Stäng utkastet och ladda om kundens aktuella åtgärd.`;
-    const messages = {
-      customer_cancelled: "Kunden är avslutad och kan inte få mejlförslag.",
-      no_valid_recipients: "Välj minst en giltig mottagare.",
-      recipient_blocked: "En vald adress är blockerad eller avregistrerad.",
-      missing_email_content: "Ämne och brödtext måste vara ifyllda.",
-      invalid_sender_email: "Din användare saknar en giltig avsändaradress.",
-      duplicate_send: "Det här utkastet har redan skickats.",
-      send_in_progress: "Utskicket pågår redan.",
-      email_type_changed: "Kundrelationen har ändrats sedan utkastet öppnades. Stäng och skapa ett nytt mejlförslag.",
-    };
-    return messages[error] || "Mejlet kunde inte skickas.";
-  }
-
-  function setReminderRetryMode(enabled) {
-    emailModalContent.querySelectorAll("input, textarea, #email-reset, #email-add-row, .email-order-remove, .email-product-option")
-      .forEach(control => {control.disabled = Boolean(enabled);});
-  }
-
-  async function sendReminderEmail(confirmWarnings) {
-    if (!reminderDraft || reminderSending) return;
-    if (reminderPlanningContext && reminderPlanningContext.customer_id !== currentCustomer?.customer_id) {
-      showToast("Utkastet hör till en annan planerad kund. Stäng och öppna rätt aktivitet igen."); return;
-    }
-    if (!reminderRetryPayload && !confirmWarnings && (reminderDraft.warnings || []).length) {
-      const text = reminderDraft.warnings.map(item => `• ${item.message}`).join("\n");
-      if (!window.confirm(`${text}\n\nVill du skicka ändå?`)) return;
-      confirmWarnings = true;
-    }
-    const button = document.getElementById("email-send");
-    reminderSending = true;
-    button.disabled = true;
-    const oldText = button.textContent;
-    let contactBlocked = false;
-    const errorBox = document.getElementById("email-send-error");
-    const payload = reminderRetryPayload || collectReminderPayload(confirmWarnings);
-    if (errorBox) {errorBox.textContent = ""; errorBox.classList.remove("visible");}
-    button.textContent = "Skickar…";
-    try {
-      const response = await fetch(`${API}/customers/${currentCustomer.row}/email-proposal/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (response.status === 409 && result.error === "warning_confirmation_required") {
-        const text = (result.warnings || []).map(item => `• ${item.message}`).join("\n");
-        if (window.confirm(`${text}\n\nFörutsättningarna har ändrats. Vill du ändå skicka?`)) {
-          reminderSending = false;
-          button.disabled = false;
-          button.textContent = oldText;
-          return sendReminderEmail(true);
-        }
-        return;
-      }
-      if (!response.ok || !result.ok) throw result;
-      if (result.planning_completion_saved === false) {
-        reminderRetryPayload = JSON.parse(JSON.stringify(payload));
-        setReminderRetryMode(true);
-        const message = "Mejlet är skickat. Försök spara kalenderstatus igen. Samma försök skickar inte mejlet på nytt.";
-        if (errorBox) {errorBox.textContent = message; errorBox.classList.add("visible");}
-        showToast(message);
-        return;
-      }
-      const plannedContext = reminderPlanningContext;
-      reminderDirty = false;
-      closeReminderModal(true);
-      showToast(result.status === "partial" ? "Mejlet skickades till vissa mottagare" : (result.is_test ? "Testmejl skickat" : `${result.email_type_label || "Mejlförslag"} skickat`));
-      if (!result.is_test) {
-        planningData = null;
-        await refreshStats(currentCustomer);
-        if (plannedContext) await refreshWorkflowViews({planning: true});
-      }
-    } catch (error) {
-      const message = reminderRetryPayload
-        ? "Mejlet är skickat men kalenderstatus kunde inte sparas. Försök spara kalenderstatus igen med samma utkast."
-        : reminderErrorMessage(error?.error, error?.message);
-      contactBlocked = ["email_contact_blocked", "do_not_contact"].includes(error?.error);
-      if (errorBox) {errorBox.textContent = message; errorBox.classList.add("visible");}
-      showToast(message);
-      if (contactBlocked) await refreshCustomerDecisions();
-    } finally {
-      reminderSending = false;
-      if (document.body.contains(button)) {
-        button.disabled = contactBlocked;
-        button.textContent = reminderRetryPayload ? "Försök spara kalenderstatus igen" : oldText;
-      }
-    }
-  }
-
-  function getPlannedEmailContext(customer, activity) {
-    if (!customer?.customer_id || activity?.contact_type !== "email" || activity.status !== "planned"
-        || (activity.customer_id && activity.customer_id !== customer.customer_id)
-        || !(typeof activity.can_execute_planned_contact === "boolean"
-          ? activity.can_execute_planned_contact : getCustomerListGuidance(customer).can_execute_planned_contact)) return null;
-    const planId = planningActivityId(activity);
-    const linked = (getCustomerInsight(customer).open_obligations || []).find(item => item.planned_activity_id === planId);
-    const obligationId = activity.obligation_id || linked?.obligation_id;
-    const obligationRevision = activity.obligation_revision ?? linked?.revision;
-    if (!planId || !obligationId || activity.revision == null || obligationRevision == null) return null;
-    return Object.freeze({
-      customer_id: customer.customer_id, planned_activity_id: planId,
-      expected_planned_activity_revision: activity.revision,
-      obligation_id: obligationId, expected_obligation_revision: obligationRevision,
-      scheduled_at: activity.scheduled_at,
-    });
-  }
-
-  async function openEmailProposal({activity = null} = {}) {
-    if (!currentCustomer) return;
-    const planningContext = activity ? getPlannedEmailContext(currentCustomer, activity) : null;
-    if (activity ? !planningContext : !customerCanStartContact(currentCustomer)) {
-      showToast("Mejlet kan inte öppnas för kontakt nu. Ladda om kundens aktuella åtgärd och planering."); return;
-    }
-    reminderPlanningContext = planningContext;
-    reminderRetryPayload = null;
-    reminderDraft = null;
-    reminderDirty = false;
-    emailModalBackdrop.classList.add("open");
-    emailModalBackdrop.setAttribute("aria-hidden", "false");
-    document.body.style.overflow = "hidden";
-    document.getElementById("email-modal-title").textContent = "Mejlförslag";
-    document.getElementById("email-modal-subtitle").textContent = currentCustomer.customer || "";
-    emailModalContent.innerHTML = '<div class="email-modal-loading">Laddar personligt utkast…</div>';
-    try {
-      const response = await fetch(`${API}/customers/${currentCustomer.row}/email-proposal-draft`);
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.draft) throw result;
-      reminderDraft = result.draft;
-      renderReminderDraft(reminderDraft);
-      reminderDirty = false;
-    } catch {
-      emailModalContent.innerHTML = '<div class="email-modal-loading">Utkastet kunde inte skapas. Kontrollera kund- och inställningsdata.</div>';
-    }
-  }
-
-  document.getElementById("email-modal-close").addEventListener("click", () => closeReminderModal());
-  emailModalBackdrop.addEventListener("click", event => {
-    if (event.target === emailModalBackdrop) closeReminderModal();
-  });
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && emailModalBackdrop.classList.contains("open")) closeReminderModal();
-  });
-
-  // ── Email proposal settings ──
-  let emailSettingsData = null;
-  let selectedEmailSettingsType = "reminder";
-  let emailSettingsDirty = false;
-  let emailSettingsSaving = false;
-  let settingsReturnView = "list";
 
   function activeViewName() {
     return document.querySelector(".view.active")?.id?.replace(/^view-/, "") || "list";
   }
 
-  function markEmailSettingsDirty() {
-    emailSettingsDirty = true;
-  }
-
-  function collectSettingsOrderRows() {
-    return Array.from(document.querySelectorAll("#settings-order-list .settings-order-row")).map(row => ({
-      product: row.querySelector(".settings-order-product")?.value.trim() || "",
-      quantity: row.querySelector(".settings-order-quantity")?.value.trim() || "",
-      unit: row.querySelector(".settings-order-unit")?.value.trim() || "DFP",
-    })).filter(row => row.product);
-  }
-
-  function renderSettingsOrderRows(rows) {
-    const list = document.getElementById("settings-order-list");
-    if (!list) return;
-    list.innerHTML = (rows || []).map((row, index) => `
-      <div class="settings-order-row" data-index="${index}">
-        <input class="settings-order-product" type="text" value="${escAttr(row.product || "")}" aria-label="Produkt" placeholder="Produkt" />
-        <input class="settings-order-quantity" type="text" value="${escAttr(row.quantity || "")}" aria-label="Antal" placeholder="Antal" />
-        <input class="settings-order-unit" type="text" value="${escAttr(row.unit || "DFP")}" aria-label="Enhet" placeholder="DFP" />
-        <button class="settings-order-remove" type="button" aria-label="Ta bort rad">✕</button>
-      </div>
-    `).join("");
-    list.querySelectorAll("input").forEach(input => input.addEventListener("input", markEmailSettingsDirty));
-    list.querySelectorAll(".settings-order-remove").forEach(button => button.addEventListener("click", () => {
-      button.closest(".settings-order-row").remove();
-      markEmailSettingsDirty();
-      renderSettingsProductPicker();
-    }));
-  }
-
-  function renderSettingsProductPicker() {
-    const picker = document.getElementById("settings-product-picker");
-    if (!picker || !emailSettingsData) return;
-    const used = new Set(collectSettingsOrderRows().map(row =>
-      row.product.toLocaleLowerCase("sv-SE")
-    ));
-    const available = (emailSettingsData.product_catalog || [])
-      .map((item, index) => ({ item, index }))
-      .filter(({ item }) => !used.has(String(item.product || "").trim().toLocaleLowerCase("sv-SE")));
-    picker.innerHTML = available.length
-      ? available.map(({ item, index }) =>
-          `<button class="email-product-option" type="button" data-catalog-index="${index}">${esc(item.product || "")}</button>`
-        ).join("")
-      : '<span class="email-product-picker-empty">Alla artiklar är redan tillagda.</span>';
-  }
-
-  function setSettingsOrderEditorVisibility() {
-    const mode = document.getElementById("settings-order-mode")?.value || "fixed";
-    const fixedEditor = document.getElementById("settings-fixed-order-editor");
-    if (!fixedEditor) return;
-    fixedEditor.style.display = mode === "fixed" ? "" : "none";
-    if (mode === "fixed" && !collectSettingsOrderRows().length) {
-      const rows = (emailSettingsData?.product_catalog || []).slice(0, 4).map(item => ({
-        product: item.product,
-        quantity: "1",
-        unit: item.unit || "DFP",
-      }));
-      renderSettingsOrderRows(rows);
-    }
-  }
-
-  function renderEmailTemplateSettings() {
-    const template = emailSettingsData?.templates?.[selectedEmailSettingsType];
-    const card = document.getElementById("settings-editor-card");
-    if (!template) {
-      card.innerHTML = '<div class="email-modal-loading">Mallen kunde inte laddas.</div>';
-      return;
-    }
-    document.querySelectorAll(".settings-template-tab").forEach(button => {
-      button.classList.toggle("active", button.dataset.emailType === selectedEmailSettingsType);
-    });
-    const reminderMode = selectedEmailSettingsType === "reminder";
-    card.innerHTML = `
-      <div class="settings-editor-heading">
-        <h2>Mejlförslag · ${esc(template.email_type_label || "")}</h2>
-        <p>Redigera standardinnehållet som visas när ett nytt utkast öppnas.</p>
-      </div>
-      <div class="settings-editor-content">
-        <div class="settings-placeholder-help">
-          Dynamiska värden fylls i när kundutkastet skapas:
-          <code>{{dagar}}</code>, <code>{{veckor}}</code>, <code>{{antal_butiker}}</code>,
-          <code>{{butiksnamn}}</code> och <code>(namn)</code>. Använd <code>**text**</code> för fetstil.
-        </div>
-        <div class="email-field">
-          <label for="settings-email-subject">Ämne</label>
-          <input id="settings-email-subject" type="text" maxlength="250" value="${escAttr(template.subject || "")}" />
-        </div>
-        <div class="email-field">
-          <label for="settings-email-intro">Brödtext (** är fetstilt)</label>
-          <textarea id="settings-email-intro" maxlength="5000">${esc(template.intro_text || "")}</textarea>
-        </div>
-        <div class="email-field">
-          <span class="email-section-label">Föreslagen beställning</span>
-          ${reminderMode ? `
-            <div class="settings-order-mode">
-              <label for="settings-order-mode">
-                Standardlogik
-                <select id="settings-order-mode">
-                  <option value="latest_order" ${template.order_mode === "latest_order" ? "selected" : ""}>Basera på kundens senaste order</option>
-                  <option value="fixed" ${template.order_mode === "fixed" ? "selected" : ""}>Använd fasta standardrader</option>
-                </select>
-              </label>
-            </div>` : '<input id="settings-order-mode" type="hidden" value="fixed" />'}
-          <div id="settings-fixed-order-editor">
-            <div id="settings-order-list"></div>
-            <button class="email-add-row" id="settings-add-row" type="button">+ Lägg till produktrad</button>
-            <div class="email-product-picker" id="settings-product-picker"></div>
-          </div>
-        </div>
-        <div class="email-field">
-          <label for="settings-email-closing">Avslutning</label>
-          <textarea id="settings-email-closing" maxlength="5000">${esc(template.closing_text || "")}</textarea>
-        </div>
-        <div class="settings-cta-grid">
-          <div class="email-field">
-            <label for="settings-stockfiller-label">Knapptext · Stockfiller</label>
-            <input id="settings-stockfiller-label" type="text" maxlength="80" value="${escAttr(template.stockfiller_label || "")}" />
-          </div>
-          <div class="email-field">
-            <label for="settings-product-label">Knapptext · Produktblad</label>
-            <input id="settings-product-label" type="text" maxlength="80" value="${escAttr(template.product_sheet_label || "")}" />
-          </div>
-        </div>
-      </div>
-      <div class="settings-save-bar">
-        <button class="action-btn secondary" id="settings-undo-btn" type="button">Ångra ändringar</button>
-        <button class="action-btn" id="settings-save-btn" type="button">Spara standardmall</button>
-      </div>`;
-
-    renderSettingsOrderRows(template.order_rows || []);
-    setSettingsOrderEditorVisibility();
-    card.querySelectorAll("#settings-email-subject, #settings-email-intro, #settings-email-closing, #settings-stockfiller-label, #settings-product-label")
-      .forEach(element => element.addEventListener("input", markEmailSettingsDirty));
-    const modeSelect = document.getElementById("settings-order-mode");
-    modeSelect.addEventListener("change", () => {
-      setSettingsOrderEditorVisibility();
-      markEmailSettingsDirty();
-    });
-    document.getElementById("settings-add-row").addEventListener("click", () => {
-      const picker = document.getElementById("settings-product-picker");
-      renderSettingsProductPicker();
-      picker.classList.toggle("open");
-    });
-    document.getElementById("settings-product-picker").addEventListener("click", event => {
-      const option = event.target.closest(".email-product-option");
-      if (!option) return;
-      const product = emailSettingsData.product_catalog?.[Number(option.dataset.catalogIndex)];
-      if (!product) return;
-      const rows = collectSettingsOrderRows();
-      rows.push({ product: product.product, quantity: "1", unit: product.unit || "DFP" });
-      renderSettingsOrderRows(rows);
-      document.getElementById("settings-product-picker").classList.remove("open");
-      markEmailSettingsDirty();
-    });
-    document.getElementById("settings-undo-btn").addEventListener("click", () => {
-      if (!emailSettingsDirty || window.confirm("Ångra alla osparade ändringar i mallen?")) {
-        renderEmailTemplateSettings();
-        emailSettingsDirty = false;
-      }
-    });
-    document.getElementById("settings-save-btn").addEventListener("click", saveEmailTemplateSettings);
-    emailSettingsDirty = false;
-  }
-
-  async function selectEmailSettingsType(emailType) {
-    if (emailType === selectedEmailSettingsType) return;
-    if (emailSettingsDirty && !window.confirm("Du har osparade ändringar. Byta mall ändå?")) return;
-    selectedEmailSettingsType = emailType;
-    renderEmailTemplateSettings();
-  }
-
-  function collectEmailTemplateSettings() {
-    return {
-      subject: document.getElementById("settings-email-subject").value.trim(),
-      intro_text: document.getElementById("settings-email-intro").value.trim(),
-      closing_text: document.getElementById("settings-email-closing").value.trim(),
-      stockfiller_label: document.getElementById("settings-stockfiller-label").value.trim(),
-      product_sheet_label: document.getElementById("settings-product-label").value.trim(),
-      order_mode: document.getElementById("settings-order-mode").value,
-      order_rows: collectSettingsOrderRows(),
-    };
-  }
-
-  async function saveEmailTemplateSettings() {
-    if (emailSettingsSaving) return;
-    const button = document.getElementById("settings-save-btn");
-    const payload = collectEmailTemplateSettings();
-    emailSettingsSaving = true;
-    button.disabled = true;
-    const oldText = button.textContent;
-    button.textContent = "Sparar…";
-    try {
-      const response = await fetch(`${API}/email-proposal-settings/${selectedEmailSettingsType}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.template) {
-        const messages = {
-          missing_email_content: "Ämne och brödtext måste vara ifyllda.",
-          missing_cta_label: "Båda knapptexterna måste vara ifyllda.",
-          missing_order_rows: "Lägg till minst en produkt och fyll i antal.",
-        };
-        throw new Error(messages[result.error] || "Standardmallen kunde inte sparas.");
-      }
-      emailSettingsData.templates[selectedEmailSettingsType] = result.template;
-      emailSettingsDirty = false;
-      renderEmailTemplateSettings();
-      showToast(`${result.template.email_type_label} sparad`);
-    } catch (error) {
-      showToast(error.message || "Standardmallen kunde inte sparas.");
-    } finally {
-      emailSettingsSaving = false;
-      if (document.body.contains(button)) {
-        button.disabled = false;
-        button.textContent = oldText;
-      }
-    }
-  }
-
-  async function openEmailSettings() {
-    if (!userIsAdmin()) return;
-    const currentView = activeViewName();
-    if (currentView !== "settings") settingsReturnView = currentView;
-    showView("settings");
-    emailSettingsData = null;
-    emailSettingsDirty = false;
-    document.getElementById("settings-editor-card").innerHTML =
-      '<div class="email-modal-loading">Laddar mejlmallar…</div>';
-    try {
-      const response = await fetch(`${API}/email-proposal-settings`);
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.templates) throw new Error();
-      emailSettingsData = result;
-      renderEmailTemplateSettings();
-    } catch {
-      document.getElementById("settings-editor-card").innerHTML =
-        '<div class="email-modal-loading">Inställningarna kunde inte laddas. Försök igen.</div>';
-    }
-  }
-
-  function closeEmailSettings() {
-    if (emailSettingsDirty && !window.confirm("Du har osparade ändringar. Lämna inställningarna ändå?")) return;
-    emailSettingsDirty = false;
-    showView(settingsReturnView === "settings" ? "list" : settingsReturnView);
-  }
-
-  document.querySelectorAll(".settings-template-tab").forEach(button => {
-    button.addEventListener("click", () => selectEmailSettingsType(button.dataset.emailType));
-  });
-  document.getElementById("settings-back-btn").addEventListener("click", closeEmailSettings);
 
   // ── Open detail ──
   async function openDetail(row, options = {}) {
@@ -7326,9 +6357,8 @@
     mailBtn.dataset.mailto = emailHref;
     mailBtn.disabled = !emailHref;
     mailBtn.onclick = () => { if (emailHref && customerCanStartContact(c)) window.location.href = emailHref; };
-    const reminderBtn = document.getElementById("d-reminder-btn");
-    reminderBtn.disabled = false;
-    reminderBtn.onclick = () => { if (customerCanStartContact(c)) openEmailProposal(); };
+
+
     renderCustomerDecisionDetail(c);
 
     // Kontaktuppgifter edit
@@ -7420,7 +6450,7 @@
       document.getElementById("d-freezer-latest").textContent = "—";
       document.getElementById("d-contact-section").style.display = "none";
       document.getElementById("d-latest-section").style.display = "none";
-      document.getElementById("d-email-tracking-section").style.display = "none";
+
     }
 
     showView("detail");
@@ -9731,9 +8761,9 @@
     const timeLabel = activity.time_is_estimated ? `ca ${time}` : time;
     const terminal = ["completed", "cancelled", "superseded"].includes(activity.status);
     const canExecute = customerCanExecutePlanned(boundCustomer, activity);
-    const canSendPlannedEmail = Boolean(getPlannedEmailContext(boundCustomer, activity));
+
     const plannedActions = !terminal && activity.status === "planned" ? `
-      ${canSendPlannedEmail ? '<button class="planning-compact-btn primary" type="button" data-planning-detail-action="email">Öppna bokat mejl</button>' : ''}
+
       ${canExecute ? '<button class="planning-compact-btn primary" type="button" data-planning-detail-action="log">Logga kontakt</button>' : '<div class="customer-permission-note">Kontakt avvaktas enligt kundens vägledning. Du kan granska, hoppa över eller avboka aktiviteten.</div>'}
       <button class="planning-compact-btn" type="button" data-planning-detail-action="edit">Redigera / flytta</button>
       <button class="planning-compact-btn" type="button" data-planning-detail-action="skip">Hoppa över</button>
@@ -9788,14 +8818,7 @@
   }
 
   function handlePlanningDetailAction(action, activity) {
-    if (action === "email") {
-      const customer = planningCustomerForItem(activity);
-      if (!getPlannedEmailContext(customer, activity)) { showToast("Mejlet kan inte skickas för den här aktiviteten. Ladda om planeringen."); return; }
-      closePlanningModal();
-      currentCustomer = customer;
-      void openEmailProposal({activity});
-      return;
-    }
+
     if (action === "edit") {
       const customer = planningCustomerForItem(activity);
       if (!customer) {
@@ -10771,7 +9794,7 @@
     document.getElementById("dfp-leaderboard-table").innerHTML = "<tbody><tr><td>Laddar...</td></tr></tbody>";
     document.getElementById("dfp-top-weeks-2026").innerHTML = '<div class="state-msg">Laddar...</div>';
     document.getElementById("freezer-summary-table").innerHTML = "<tbody><tr><td>Laddar...</td></tr></tbody>";
-    document.getElementById("email-performance-report").innerHTML = '<div class="state-msg">Laddar...</div>';
+
 
     try {
       const query = responsible ? `?responsible=${encodeURIComponent(responsible)}` : "";
@@ -10787,8 +9810,7 @@
         '<div class="state-msg">Kunde inte ladda toppveckor.</div>';
       document.getElementById("freezer-summary-table").innerHTML =
         '<tbody><tr><td>Kunde inte ladda frysdisken.</td></tr></tbody>';
-      document.getElementById("email-performance-report").innerHTML =
-        '<div class="state-msg">Kunde inte ladda mejlutfall.</div>';
+
       showToast("Kunde inte ladda uppföljning.");
     } finally {
       followupInsightsLoading = false;
@@ -10801,7 +9823,7 @@
     renderDfpTopWeeks2026(data);
     renderContactInsights(data.contacts);
     renderFreezerSummary(data.freezer_summary);
-    renderEmailPerformance(data.email_performance || {});
+
 
     const selected = data.selected_responsible || "Alla ansvariga";
     document.getElementById("insights-subtitle").textContent = selected;
@@ -10980,88 +10002,6 @@
     `;
   }
 
-  function formatEmailOrderValue(values) {
-    const entries = Object.entries(values || {}).filter(([, value]) => Number(value || 0) !== 0);
-    if (!entries.length) return "0";
-    return entries.map(([currency, value]) =>
-      `${Number(value || 0).toLocaleString("sv-SE", { maximumFractionDigits: 2 })} ${currency}`
-    ).join(" · ");
-  }
-
-  function renderEmailPerformance(performance) {
-    const target = document.getElementById("email-performance-report");
-    const period = document.getElementById("email-performance-period");
-    period.textContent = performance.period_label || "Liveutskick";
-
-    if (!Number(performance.live_email_count || 0)) {
-      target.innerHTML = `
-        <div class="state-msg" style="padding:8px 0">Inga liveutskick ännu.</div>
-        <div class="email-report-note">Testmejl ingår inte i rapporten.</div>
-      `;
-      return;
-    }
-
-    const stores = Number(performance.unique_store_count || 0);
-    const followup = performance.followup_counts || {};
-    const card = (value, label, meta, intent = false) => `
-      <div class="email-report-card${intent ? " intent" : ""}">
-        <div class="email-report-value">${esc(String(value))}</div>
-        <div class="email-report-label">${esc(label)}</div>
-        <div class="email-report-meta">${esc(meta)}</div>
-      </div>
-    `;
-
-    target.innerHTML = `
-      <div class="email-report-grid">
-        ${card(
-          Number(performance.ordered_store_count || 0).toLocaleString("sv-SE"),
-          "Order inom 10 dagar",
-          `${Number(performance.ordered_store_rate || 0).toLocaleString("sv-SE")} % av ${stores} mejlade butiker`,
-          true
-        )}
-        ${card(
-          Number(performance.stockfiller_clicked_store_count || 0).toLocaleString("sv-SE"),
-          "Stockfiller klickat",
-          `${Number(performance.stockfiller_clicked_store_rate || 0).toLocaleString("sv-SE")} % av ${stores} mejlade butiker`,
-          true
-        )}
-        ${card(
-          Number(performance.product_clicked_store_count || 0).toLocaleString("sv-SE"),
-          "Produktblad klickat",
-          `${Number(performance.product_clicked_store_rate || 0).toLocaleString("sv-SE")} % av ${stores} mejlade butiker`,
-          true
-        )}
-        ${card(
-          formatEmailOrderValue(performance.attributed_order_value_by_currency),
-          "Attribuerat ordervärde",
-          `${Number(performance.attributed_order_count || 0).toLocaleString("sv-SE")} order`
-        )}
-        ${card(
-          Number(performance.attributed_dfp || 0).toLocaleString("sv-SE", { maximumFractionDigits: 2 }),
-          "Attribuerad volym",
-          "DFP från order inom 10 dagar"
-        )}
-        ${card(
-          Number(performance.delivered_email_count || 0).toLocaleString("sv-SE"),
-          "Levererade mejl",
-          `av ${Number(performance.sent_email_count || 0).toLocaleString("sv-SE")} skickade mottagarmejl`
-        )}
-      </div>
-      <div class="email-report-secondary">
-        Öppnat: ${Number(performance.opened_store_count || 0).toLocaleString("sv-SE")} butiker
-        (${Number(performance.opened_store_rate || 0).toLocaleString("sv-SE")} %) · indikativt mått
-      </div>
-      <div class="email-report-secondary">
-        Uppföljningssignaler: Stockfiller ${Number(followup.stockfiller_clicked_no_order || 0).toLocaleString("sv-SE")}
-        · Produktblad ${Number(followup.product_sheet_clicked_no_order || 0).toLocaleString("sv-SE")}
-        · Öppnat utan klick ${Number(followup.opened_no_click || 0).toLocaleString("sv-SE")}
-        · Levererat utan aktivitet ${Number(followup.delivered_no_activity || 0).toLocaleString("sv-SE")}
-      </div>
-      <div class="email-report-note">
-        Unika butiker räknas en gång per mått. Testmejl ingår inte. Filtret ”Klickat – ingen order” visas efter 3 dagar.
-      </div>
-    `;
-  }
 
   function renderFreezerSummary(summary) {
     const table = document.getElementById("freezer-summary-table");
@@ -11655,13 +10595,11 @@
     if (e.key === "Enter") document.getElementById("login-btn").click();
   }));
 
-  document.getElementById("settings-btn").addEventListener("click", openEmailSettings);
 
   document.getElementById("logout-btn").addEventListener("click", async () => {
-    if (emailSettingsDirty && !window.confirm("Du har osparade malländringar. Logga ut ändå?")) return;
-    try { await fetch(`${API}/logout`, { method: "POST" }); } catch {}
-    window.location.reload();
-  });
+  try { await fetch(`${API}/logout`, { method: "POST" }); } catch {}
+  window.location.reload();
+});
 
   checkLogin();
 </script>

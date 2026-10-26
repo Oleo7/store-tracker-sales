@@ -38,7 +38,6 @@ TODAY = date(2026, 5, 6)
 class PriorityTests(TestCase):
     def setUp(self):
         app_module.app.config.update(TESTING=True, SECRET_KEY="priority-test-secret")
-        app_module._email_sheets_cache = None
         current_user_patcher = patch.object(
             app_module,
             "current_user",
@@ -73,7 +72,7 @@ class PriorityTests(TestCase):
             with self.subTest(value=value):
                 self.assertEqual(normalize_contact_result(value), expected)
 
-    def test_email_after_followup_date_resolves_plan_and_preserves_human_signals(self):
+    def test_historical_automated_email_does_not_resolve_human_followup(self):
         contact_features = build_contact_features(
             [
                 {
@@ -111,14 +110,14 @@ class PriorityTests(TestCase):
             TODAY,
         )[0]
 
-        self.assertEqual(feature["latest_contact_date"], date(2026, 5, 4))
-        self.assertEqual(feature["latest_contact_channel"], "Mejl")
+        self.assertEqual(feature["latest_contact_date"], date(2026, 5, 1))
+        self.assertEqual(feature["latest_contact_channel"], "Besök")
         self.assertEqual(feature["latest_contact_class"], "Positiv")
         self.assertEqual(feature["latest_contact_comment"], "Bra dialog")
         self.assertEqual(feature["latest_freezer_fields"], ("Franui",))
         self.assertEqual(priority["latest_follow_up_date"], "2026-05-03")
-        self.assertFalse(priority["follow_up_due"])
-        self.assertFalse(priority["missad_uppfoljning"])
+        self.assertTrue(priority["follow_up_due"])
+        self.assertTrue(priority["missad_uppfoljning"])
 
     def test_email_before_followup_date_does_not_resolve_plan(self):
         contact_features = build_contact_features(
@@ -153,7 +152,7 @@ class PriorityTests(TestCase):
             TODAY,
         )[0]
 
-        self.assertEqual(priority["latest_contact_date"], "2026-05-02")
+        self.assertEqual(priority["latest_contact_date"], "2026-05-01")
         self.assertEqual(priority["latest_follow_up_date"], "2026-05-03")
         self.assertTrue(priority["follow_up_due"])
         self.assertTrue(priority["missad_uppfoljning"])
@@ -189,7 +188,7 @@ class PriorityTests(TestCase):
             TODAY,
         )[0]
 
-        self.assertEqual(priority["latest_contact_date"], "2026-05-05")
+        self.assertEqual(priority["latest_contact_date"], "2026-01-01")
         self.assertEqual(priority["latest_contact_class"], "Negativ")
         self.assertIn("Negativ kontakt för 125 dagar sedan", priority["reasons"])
 
@@ -429,17 +428,11 @@ class PriorityTests(TestCase):
                 "warm_lead",
                 "retry",
                 "negative_reactivation",
-                "stockfiller_click_followup",
-                "product_sheet_click_followup",
             },
             "avvakta": {
                 "scheduled_followup",
                 "monitor",
                 "pause",
-                "email_order_monitor",
-                "email_click_wait",
-                "email_open_wait",
-                "email_delivery_wait",
                 "unknown",
                 None,
             },
@@ -1300,7 +1293,7 @@ class PriorityTests(TestCase):
             {"besök", "telefon", "email", "avvakta"},
         )
 
-    def test_due_email_proposal_does_not_override_visit_recommendations(self):
+    def test_non_email_insights_preserve_visit_recommendations(self):
         customers = [
             [
                 "customer",
@@ -1371,7 +1364,7 @@ class PriorityTests(TestCase):
             with self.subTest(action_type=action_type):
                 insight = insights[customer_key]
                 self.assertEqual(insight["next_action"]["action_type"], action_type)
-                self.assertTrue(insight["email_proposal_due"])
+                self.assertNotIn("email_proposal_due", insight)
                 self.assertEqual(insight["recommended_channel"], "besök")
                 self.assertEqual(insight["next_action"]["contact_type"], "visit")
                 self.assertTrue(insight["next_action"]["can_contact_now"])

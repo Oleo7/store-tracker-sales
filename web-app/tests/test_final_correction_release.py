@@ -22,13 +22,7 @@ from route_proposal import (  # noqa: E402
     anchor_aware_preselect_candidates,
 )
 from test_planning import ConstantRoadProvider, PlanningApiTestCase  # noqa: E402
-from test_priority_v4 import (  # noqa: E402
-    contact,
-    customer,
-    email_rows,
-    order,
-    scored,
-)
+from test_priority_v4 import contact, customer, order, scored
 
 
 class ProgressiveQueueTests(PlanningApiTestCase):
@@ -93,14 +87,7 @@ class ProgressiveQueueTests(PlanningApiTestCase):
         self.assertEqual(len(complete["queue_preview"]), 72)
 
 
-class ChannelAndEmailIntentTests(TestCase):
-    def snapshot(self, kind, proposal_type, today):
-        messages, recipients = email_rows(
-            kind=kind, proposal_type=proposal_type
-        )
-        return app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=today, customers=[customer()]
-        )["id:cid-1"]
+class ChannelRecommendationTests(TestCase):
 
     def test_segment_a_positive_dialogue_is_visit_without_score_change(self):
         item = scored(
@@ -120,165 +107,6 @@ class ChannelAndEmailIntentTests(TestCase):
         self.assertEqual(channel["base_contact_type"], "visit")
         self.assertEqual(channel["recommended_contact_type"], "visit")
         self.assertEqual(item["priority_score"], score_before)
-
-    def test_email_primary_overrides_segment_and_lifecycle_with_fallback(self):
-        phone = recommend_contact_channel(
-            lifecycle="reactivation", trigger_key="email_open_followup",
-            segment="A", phone="0701234567", email_available=True,
-        )
-        email = recommend_contact_channel(
-            lifecycle="reactivation", trigger_key="product_sheet_click_followup",
-            segment="A", phone="saknas", email_available=True,
-        )
-        self.assertEqual(phone["base_contact_type"], "phone")
-        self.assertEqual(phone["recommended_contact_type"], "phone")
-        self.assertEqual(email["recommended_contact_type"], "email")
-
-    def test_proposal_type_by_engagement_matrix_has_dynamic_copy_and_phone(self):
-        proposal_labels = {
-            "reminder": "Påminnelse",
-            "reactivation": "Återaktivering",
-            "new_customer": "Nykund",
-        }
-        engagement = {
-            "product": (
-                date(2026, 8, 5), "product_sheet_click_followup",
-                "produktbladsklick",
-            ),
-            "stockfiller": (
-                date(2026, 8, 5), "stockfiller_click_followup",
-                "Stockfiller-klick",
-            ),
-        }
-        for proposal_type, proposal_label in proposal_labels.items():
-            for kind, (today, trigger, engagement_label) in engagement.items():
-                with self.subTest(proposal_type=proposal_type, kind=kind):
-                    feature = self.snapshot(kind, proposal_type, today)
-                    item = scored(today=today, email_feature=feature)[0]
-                    self.assertEqual(item["primary_trigger_type"], trigger)
-                    self.assertEqual(
-                        item["primary_reason_text"],
-                        f"{engagement_label.capitalize()} för 3 dagar sedan"
-                        f" · {proposal_label} · ingen senare order",
-                    )
-                    channel = recommend_contact_channel(
-                        lifecycle=item["lifecycle"], trigger_key=trigger,
-                        segment=item["segment"], phone="0701234567",
-                        email_available=True,
-                    )
-                    self.assertEqual(channel["base_contact_type"], "phone")
-
-    def test_open_retains_historical_first_open_without_suppressing_generic_trigger(self):
-        messages, recipients = email_rows(kind="open", proposal_type="reactivation")
-        recipients[0]["last_opened_at"] = "2026-08-09 10:00:00"
-        waiting_snapshot = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=date(2026, 8, 11),
-            customers=[customer(segment="A")],
-        )["id:cid-1"]
-        waiting = scored(
-            today=date(2026, 8, 11), email_feature=waiting_snapshot,
-            customers=[customer(segment="A")],
-        )[0]
-        ready_snapshot = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=date(2026, 8, 12),
-            customers=[customer(segment="A")],
-        )["id:cid-1"]
-        ready = scored(
-            today=date(2026, 8, 12), email_feature=ready_snapshot,
-            customers=[customer(segment="A")],
-        )[0]
-
-        self.assertEqual(waiting_snapshot["email_followup_wait_days_remaining"], 1)
-        self.assertEqual(
-            waiting["recommendation_suppression_reason"],
-            "",
-        )
-        self.assertEqual(ready["primary_trigger_type"], "value_based_contact_due")
-        self.assertEqual(
-            waiting["active_email_intent_event"], ready["active_email_intent_event"]
-        )
-
-    def test_stronger_click_restarts_wait_and_stockfiller_wins(self):
-        messages, recipients = email_rows(kind="open")
-        recipients[0].update({
-            "product_sheet_click_count": "1",
-            "product_sheet_first_clicked_at": "2026-08-12 10:00:00",
-            "product_sheet_last_clicked_at": "2026-08-12 10:00:00",
-        })
-        product_wait = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=date(2026, 8, 14),
-            customers=[customer()],
-        )["id:cid-1"]
-        self.assertEqual(product_wait["email_followup_wait_days_remaining"], 1)
-        self.assertEqual(product_wait["email_followup_status"], "product_sheet_clicked_no_order")
-
-        recipients[0].update({
-            "stockfiller_click_count": "1",
-            "stockfiller_first_clicked_at": "2026-08-15 10:00:00",
-            "stockfiller_last_clicked_at": "2026-08-15 10:00:00",
-        })
-        stock = app_module.build_email_engagement_snapshot(
-            messages, recipients, [], today=date(2026, 8, 18),
-            customers=[customer()],
-        )["id:cid-1"]
-        self.assertEqual(stock["email_followup_status"], "stockfiller_clicked_no_order")
-        baseline = scored(today=date(2026, 8, 18))[0]
-        self.assertEqual(
-            scored(today=date(2026, 8, 18), email_feature=stock)[0]["intent_timing"],
-            round(100 * (scored(today=date(2026, 8, 18), email_feature=stock)[0])["work_contact_factor"]),
-        )
-
-    def test_scanner_and_non_live_messages_do_not_create_intent(self):
-        scanner = {
-            "event_type": "opened", "event_time": "2026-08-02 10:00:00",
-            "payload_json": "transac-phishing-consumer",
-        }
-        self.assertEqual(app_module._recipient_summary({}, [scanner])["open_count"], 0)
-        human = {
-            "event_type": "opened", "event_time": "2026-08-03 10:00:00",
-            "payload_json": '{"user-agent":"Mozilla/5.0"}',
-        }
-        human_summary = app_module._recipient_summary({}, [scanner, human])
-        self.assertEqual(human_summary["open_count"], 1)
-        self.assertEqual(human_summary["first_opened_at"], human["event_time"])
-        first_only_messages, first_only_recipients = email_rows(kind="open")
-        first_only_recipients[0].pop("last_opened_at")
-        first_only = app_module.build_email_engagement_snapshot(
-            first_only_messages, first_only_recipients, [],
-            today=date(2026, 8, 12), customers=[customer()],
-        )["id:cid-1"]
-        self.assertEqual(first_only["email_followup_status"], "opened_no_click")
-        self.assertEqual(first_only["email_followup_wait_days_remaining"], 0)
-        messages, recipients = email_rows(kind="open")
-        messages[0]["is_test"] = "Y"
-        self.assertEqual(
-            app_module.build_email_engagement_snapshot(
-                messages, recipients, [], today=date(2026, 8, 20),
-                customers=[customer()],
-            ),
-            {},
-        )
-
-    def test_farjestaden_reactivation_uses_history_and_phone_despite_open(self):
-        feature = self.snapshot("open", "reactivation", date(2026, 8, 12))
-        item = scored(
-            today=date(2026, 8, 12),
-            orders=[order("O-1", "2026-02-01"), order("O-2", "2026-03-01")],
-            contacts=[contact("2025-12-01 10:00:00")],
-            email_feature=feature,
-            customers=[customer(name="Ica Kvantum Färjestaden", segment="A")],
-        )[0]
-        channel = recommend_contact_channel(
-            lifecycle=item["lifecycle"], trigger_key=item["primary_trigger_type"],
-            segment=item["segment"], phone="0701234567", email_available=True,
-        )
-        self.assertEqual(item["lifecycle"], "reactivation")
-        self.assertEqual(item["primary_trigger_type"], "repeat_reactivation_due")
-        self.assertEqual(
-            item["primary_reason_text"],
-            "Tidigare återkommande kund · 164 dagar sedan senaste leveransen",
-        )
-        self.assertEqual(channel["recommended_contact_type"], "phone")
 
 
 class MatrixProvider:

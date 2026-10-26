@@ -14,7 +14,6 @@ WEB_APP_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WEB_APP_DIR))
 
 import app as app_module
-from legacy_email_identity import plan_legacy_email_identity_backfill
 from priority import build_contact_features, build_order_features, build_priority_customers
 from sheets_availability import SheetReadCache, read_with_retry
 from tests.test_planning import PlanningApiTestCase, default_spreadsheet
@@ -635,9 +634,6 @@ class AppAvailabilityTests(TestCase):
         self.assertEqual(sheet.batch_update_count - before, 1)
 
     def test_global_snapshot_is_reused_then_invalidated(self):
-        app_module.ensure_email_worksheets(
-            self.spreadsheet, include_events=False
-        )
         with patch.object(
             app_module, "build_current_priority_snapshot",
             wraps=app_module.build_current_priority_snapshot,
@@ -658,9 +654,6 @@ class AppAvailabilityTests(TestCase):
             self.assertEqual(build.call_count, 2)
 
     def test_priority_snapshot_ignores_unrelated_dataset_invalidations(self):
-        app_module.ensure_email_worksheets(
-            self.spreadsheet, include_events=False
-        )
         with patch.object(
             app_module,
             "build_current_priority_snapshot",
@@ -678,9 +671,6 @@ class AppAvailabilityTests(TestCase):
         self.assertEqual(build.call_count, 1)
 
     def test_priority_snapshot_rebuilds_for_each_relevant_dependency(self):
-        app_module.ensure_email_worksheets(
-            self.spreadsheet, include_events=False
-        )
         with patch.object(
             app_module,
             "build_current_priority_snapshot",
@@ -705,9 +695,6 @@ class AppAvailabilityTests(TestCase):
         self._assert_snapshot_build_race("score_events", expected_builds=1)
 
     def _assert_snapshot_build_race(self, invalidated_title, *, expected_builds):
-        app_module.ensure_email_worksheets(
-            self.spreadsheet, include_events=False
-        )
         original = app_module.build_current_priority_snapshot
         build_started = threading.Event()
         release_build = threading.Event()
@@ -756,9 +743,6 @@ class AppAvailabilityTests(TestCase):
         self.assertEqual(build_count, expected_builds)
 
     def test_explicit_planning_rows_still_use_planned_dataset_generation(self):
-        app_module.ensure_email_worksheets(
-            self.spreadsheet, include_events=False
-        )
         planned_rows = [{
             "planned_activity_id": "explicit-plan",
             "status": "planned",
@@ -792,9 +776,6 @@ class AppAvailabilityTests(TestCase):
         self.assertEqual(build.call_count, 2)
 
     def test_broad_and_global_cache_invalidation_rebuild_priority_snapshot(self):
-        app_module.ensure_email_worksheets(
-            self.spreadsheet, include_events=False
-        )
         with patch.object(
             app_module,
             "build_current_priority_snapshot",
@@ -816,31 +797,11 @@ class AppAvailabilityTests(TestCase):
 
         self.assertEqual(build.call_count, 3)
 
-    def test_email_sales_activity_persists_canonical_customer_id(self):
-        app_module.build_sales_activity_for_email(
-            self.spreadsheet,
-            email_id="email-identity-1",
-            email_type="reminder",
-            customer_name="Butik A",
-            customer_id="11111111-1111-4111-8111-111111111111",
-            user={"user_name": "olle", "name": "Olle"},
-            recipients=["buyer@example.com"],
-            partial=False,
-        )
-        row = self.spreadsheet.worksheet("sales_activities").dict_rows()[-1]
-        self.assertEqual(
-            row["customer_id"], "11111111-1111-4111-8111-111111111111"
-        )
-        self.assertEqual(row["email_id"], "email-identity-1")
-
 
 class ConcurrentEndpointAvailabilityTests(PlanningApiTestCase):
     def setUp(self):
         super().setUp()
         self.spreadsheet._store_tracker_enable_read_cache = True
-        app_module.ensure_email_worksheets(
-            self.spreadsheet, include_events=False
-        )
         app_module._sheet_read_cache.clear()
         app_module.invalidate_priority_snapshot()
 
@@ -866,7 +827,7 @@ class ConcurrentEndpointAvailabilityTests(PlanningApiTestCase):
         count_lock = threading.Lock()
         budget_titles = {
             "customers_enriched", "order_rows", "sales_activities", "users",
-            "email_messages", "email_recipients", "planned_activities",
+              "planned_activities",
         }
         for title in budget_titles:
             sheet = self.spreadsheet.worksheet(title)
@@ -923,7 +884,7 @@ class ConcurrentEndpointAvailabilityTests(PlanningApiTestCase):
 
 
 class LegacyEmailIdentityTests(TestCase):
-    def test_ornaset_unlinked_email_preserves_promise_and_commercial_reorder_value(self):
+    def test_historical_automated_email_cannot_resolve_customer_promise_or_alter_value(self):
         customer_id = "f43f7cee-1e62-4b70-9735-0000000002e8"
         customers = [{
             "row": 2, "customer_id": customer_id,
@@ -957,9 +918,8 @@ class LegacyEmailIdentityTests(TestCase):
         order_features = build_order_features(orders)
         contact_features = build_contact_features(contacts, order_features)
         feature = next(iter(contact_features.values()))
-        # This old compatibility flag is customer-wide. The canonical model
-        # must preserve the separately sourced commitment despite that flag.
-        self.assertTrue(feature["follow_up_resolved"])
+        # An automatic historical dispatch cannot resolve a human promise.
+        self.assertFalse(feature["follow_up_resolved"])
         item = build_priority_customers(
             customers, order_features, contact_features, "Olle",
             date(2026, 8, 8), limit=1,
@@ -968,49 +928,3 @@ class LegacyEmailIdentityTests(TestCase):
         self.assertEqual(item["primary_trigger_type"], "overdue_planned_activity")
         self.assertGreater(item["business_overdue_days"], 0)
         self.assertGreater(item["business_value_score"], 0)
-
-    def test_backfill_prefers_unique_number_then_exact_unique_name(self):
-        plan = plan_legacy_email_identity_backfill(
-            customers=[
-                {"customer": "Stora COOP Örnäset", "customer_number": "100", "customer_id": "f43f7cee-1e62-4b70-9735-0000000002e8"},
-                {"customer": "Dublett", "customer_number": "200", "customer_id": "id-a"},
-                {"customer": "Dublett", "customer_number": "201", "customer_id": "id-b"},
-            ],
-            message_rows=[
-                (2, {"email_id": "mail-1", "customer": "Fel namn", "customer_number": "100", "customer_id": ""}),
-                (3, {"email_id": "mail-2", "customer": "Stora COOP Örnäset", "customer_number": "", "customer_id": ""}),
-                (4, {"email_id": "mail-3", "customer": "Dublett", "customer_number": "", "customer_id": ""}),
-                (5, {"email_id": "mail-4", "customer": "Saknas", "customer_number": "", "customer_id": ""}),
-            ],
-            recipient_rows=[
-                (2, {"email_id": "mail-1", "customer_id": ""}),
-                (3, {"email_id": "unknown", "customer_id": ""}),
-            ],
-            activity_rows=[(2, {"email_id": "mail-2", "customer_id": ""})],
-        )
-        expected = "f43f7cee-1e62-4b70-9735-0000000002e8"
-        self.assertEqual(plan["email_messages"]["backfilled"], 2)
-        self.assertEqual(plan["email_messages"]["ambiguous"], 1)
-        self.assertEqual(plan["email_messages"]["unresolved"], 1)
-        self.assertTrue(all(
-            item["customer_id"] == expected
-            for item in plan["email_messages"]["updates"]
-        ))
-        self.assertEqual(
-            plan["email_recipients"]["updates"][0]["customer_id"], expected
-        )
-        self.assertEqual(
-            plan["sales_activities"]["updates"][0]["customer_id"], expected
-        )
-
-    def test_backfill_is_idempotent_for_already_repaired_rows(self):
-        customer_id = "f43f7cee-1e62-4b70-9735-0000000002e8"
-        plan = plan_legacy_email_identity_backfill(
-            customers=[{"customer": "Stora COOP Örnäset", "customer_number": "100", "customer_id": customer_id}],
-            message_rows=[(2, {"email_id": "mail-1", "customer_id": customer_id})],
-            recipient_rows=[(2, {"email_id": "mail-1", "customer_id": customer_id})],
-            activity_rows=[(2, {"email_id": "mail-1", "customer_id": customer_id})],
-        )
-        self.assertEqual(plan["totals"], {
-            "examined": 0, "backfilled": 0, "ambiguous": 0, "unresolved": 0,
-        })

@@ -567,7 +567,11 @@ def build_order_features(order_rows: list[dict], *, customers=None, as_of=None) 
 
 
 def is_human_contact(row: dict) -> bool:
-    """Use the same CRM-email exclusion as contact feature calculation."""
+    """Historical automated rows are not human dialogue, even after retirement.
+
+    email_id/activity_source are inert audit markers retained on old contacts;
+    no provider tables or sending functionality are used.
+    """
     return not (
         bool(str(row.get("email_id") or "").strip())
         or normalize_customer_key(row.get("activity_source")) == "crm_email"
@@ -579,8 +583,11 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
     contact_count_30d = defaultdict(int)
     snapshot = _snapshot_time(as_of)
     source_rows = list(sales_activities)
+    # Retain automated events in source_rows for audit/reconciliation, never as
+    # human contact evidence or inputs to active priority and follow-up features.
+    human_rows = [row for row in source_rows if is_human_contact(row)]
     today = snapshot.date()
-    sales_activities = _canonicalize_rows(sales_activities, customers, name_field="customer", number_field="customer_number")
+    sales_activities = _canonicalize_rows(human_rows, customers, name_field="customer", number_field="customer_number")
     inferred_by_number, _inferred_by_name = _inferred_ids(
         sales_activities, name_field="customer", number_field="customer_number"
     )
@@ -608,7 +615,6 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
                 "sort_key": (_event_timestamp(row.get("date_time")), idx),
                 "datetime": contact_dt,
                 "row": row,
-                "is_email": not is_human_contact(row),
                 "follow_up_date": parse_date(row.get("follow_up_date")),
                 "customer_id": customer_id,
                 "customer_number": str(row.get("customer_number") or "").strip(),
@@ -621,8 +627,8 @@ def build_contact_features(sales_activities: list[dict], order_features: dict, *
     for identity_key, activities in activities_by_customer.items():
         activities.sort(key=lambda activity: activity["sort_key"])
         latest_activity = activities[-1]
-        human_activities = [activity for activity in activities if not activity["is_email"]
-                            and str(activity["row"].get("result") or "").strip().casefold() not in {"kontakt tillåten", "återkom ej", "kontakta ej", "ring ej"}]
+        human_activities = [activity for activity in activities
+                            if str(activity["row"].get("result") or "").strip().casefold() not in {"kontakt tillåten", "återkom ej", "kontakta ej", "ring ej"}]
         latest_human = human_activities[-1] if human_activities else None
         reached = [a for a in human_activities if normalize_contact_result(a["row"].get("result")) in REACHED_RESULTS]
         last_reached = reached[-1] if reached else None
@@ -878,21 +884,6 @@ def decision_context_lifecycle(delivery_count):
 
 FIRST_ORDER_HIGH_VALUE_INDEX = 70
 
-EMAIL_INTENT_STATUS = {
-    "stockfiller_clicked_no_order": {
-        "trigger": "stockfiller_click_followup",
-        "event_field": "email_stockfiller_first_clicked_at",
-        "engagement_label": "Stockfiller-klick",
-        "modifier": 8,
-    },
-    "product_sheet_clicked_no_order": {
-        "trigger": "product_sheet_click_followup",
-        "event_field": "email_product_sheet_first_clicked_at",
-        "engagement_label": "produktbladsklick",
-        "modifier": 4,
-    },
-}
-
 
 def _stable_legacy_contact_id(row_index, customer_key, date_time_value):
     identity = ":".join(
@@ -900,57 +891,6 @@ def _stable_legacy_contact_id(row_index, customer_key, date_time_value):
          str(date_time_value or "").strip()]
     )
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"polarbar-planning:{identity}"))
-
-
-def _active_email_intent(
-    email_feature, latest_human_contact, last_order_date, *, blocked=False, today=None, as_of=None
-):
-    status = str(email_feature.get("email_followup_status") or "").strip()
-    intent = EMAIL_INTENT_STATUS.get(status)
-    if not intent:
-        return {}
-    first_event = _local_datetime(email_feature.get(intent["event_field"]))
-    if not first_event:
-        return {}
-    if as_of is not None and _event_timestamp(first_event) > _snapshot_time(as_of).timestamp():
-        return {}
-    age = ((today or date.today()) - first_event.date()).days
-    if age < 0:
-        return {}
-    if latest_human_contact and latest_human_contact > first_event:
-        return {}
-    if last_order_date and last_order_date >= first_event.date():
-        return {}
-    email_id = str(email_feature.get("email_followup_email_id") or "").strip()
-    if not email_id:
-        return {}
-    trigger = intent["trigger"]
-    event_id = ":".join((
-        email_id, trigger, first_event.isoformat(timespec="seconds")
-    ))
-    wait_days = max(0, int(_parse_number(
-        email_feature.get("email_followup_wait_days_remaining")
-    )))
-    wait_days = max(wait_days, 3 - age)
-    ready = not blocked and wait_days <= 0 and age <= 14
-    proposal_label = str(
-        email_feature.get("email_followup_proposal_label") or "Påminnelse"
-    ).strip()
-    engagement_label = intent["engagement_label"]
-    reason = (
-        f"{engagement_label[0].upper() + engagement_label[1:]} för {age} dagar sedan"
-        f" · {proposal_label} · ingen senare order"
-    )
-    return {
-        "trigger": trigger if ready else "",
-        "event_id": event_id,
-        "modifier": intent["modifier"] if ready else 0,
-        "reason": reason,
-        "first_event_at": first_event,
-        "ready": ready,
-        "waiting": bool(not blocked and wait_days > 0 and age <= 14),
-        "wait_days": wait_days,
-    }
 
 
 def _guidance_date(value, today=None):
@@ -965,8 +905,6 @@ TRIGGER_ACTIONS = {
     "first_order_onboarding": ("check_placement", "Kontrollera placering och start"),
     "first_order_reorder": ("secure_repeat_purchase", "Säkra återköpet"),
     "established_reorder_due": ("secure_next_order", "Säkra nästa order"),
-    "stockfiller_click_followup": ("follow_up_order_interest", "Följ upp beställningsintresset"),
-    "product_sheet_click_followup": ("follow_up_product_interest", "Följ upp produktintresset"),
     "positive_dialogue_followup": ("follow_up_dialogue", "Följ upp dialogen"),
     "repeat_reactivation_due": ("reactivate_customer", "Återaktivera kunden"),
     "single_order_reactivation_due": ("reactivate_customer", "Återaktivera kunden"),
@@ -1013,7 +951,7 @@ def _contact_type_label(value):
 
 def _focus_key(
     *, lifecycle, segment, order_count, delivery_count, has_future_delivery,
-    positive_signal, qualified_email_signal,
+    positive_signal,
 ):
     if lifecycle == "reactivation" and not has_future_delivery:
         return "reactivation"
@@ -1023,7 +961,7 @@ def _focus_key(
         return "second_purchase"
     if segment == "A" and order_count == 0:
         return "a_prospect"
-    if order_count == 0 and (positive_signal or qualified_email_signal):
+    if order_count == 0 and positive_signal:
         return "warm_opportunity"
     return "other"
 
@@ -1035,7 +973,6 @@ def build_priority_customers(
     responsible: str | None,
     today: date,
     limit: int = 30,
-    email_features: dict | None = None,
     planned_activities=(),
     workflow_suppressions: dict | None = None,
     scoring_version: str = SCORE_VERSION,
@@ -1078,7 +1015,6 @@ def build_priority_customers(
         obligation_states = derived_state["obligations"]
         if contact_permissions is None:
             contact_permissions = derived_state["contact_permissions"]
-    email_features = email_features or {}
     workflow_suppressions = workflow_suppressions or {}
     number_index = {
         normalize_customer_key(feature.get("customer_number")): feature
@@ -1087,7 +1023,6 @@ def build_priority_customers(
     }
     order_indices = _feature_identity_indices(order_features)
     contact_indices = _feature_identity_indices(contact_features)
-    email_indices = _feature_identity_indices(email_features)
     # Route-save can score only selected stores, but segment/format priors,
     # customer identity ambiguity and historical benchmarks MUST be computed
     # against the complete portfolio, exactly as for the Butiker list.
@@ -1150,13 +1085,6 @@ def build_priority_customers(
         contact = _identity_feature(
             customer,
             contact_indices,
-            name_field="customer",
-            number_field="customer_number",
-            ambiguous_master_names=ambiguous_master_names,
-        )
-        email_feature = _identity_feature(
-            customer,
-            email_indices,
             name_field="customer",
             number_field="customer_number",
             ambiguous_master_names=ambiguous_master_names,
@@ -1240,22 +1168,6 @@ def build_priority_customers(
         has_order_after_latest_contact = bool(
             latest_human_date and last_order and last_order >= latest_human_date
         )
-        active_email_intent = _active_email_intent(
-            email_feature,
-            contact.get("latest_human_contact_datetime"),
-            last_order,
-            blocked=bool(activity or has_current_explicit_follow_up),
-            today=today,
-            as_of=snapshot,
-        )
-        business_email_intent = _active_email_intent(
-            email_feature,
-            contact.get("latest_human_contact_datetime"),
-            last_order,
-            blocked=False,
-            today=today,
-            as_of=snapshot,
-        )
         lifecycle = customer_lifecycle(delivery_count, days_since_delivery, overdue_days)
         context_lifecycle = decision_context_lifecycle(delivery_count)
 
@@ -1333,7 +1245,7 @@ def build_priority_customers(
         workflow_reason = None
         decision_context = {
             "status_key": "idle",
-            "reason_code": "recent_email_engagement_wait" if business_email_intent.get("waiting") else "",
+            "reason_code": "",
         }
         latest_reached_result = contact.get("latest_reached_result") or ""
         positive_dialogue_without_order = bool(
@@ -1390,8 +1302,8 @@ def build_priority_customers(
             reported_order_date=contact.get("latest_reported_order_date"),
             latest_verified_delivery_date=business_last_delivery,
             future_delivery=future_delivery,
-            qualified_email_trigger=business_email_intent.get("trigger", "") if business_email_intent.get("ready") else "",
-            qualified_email_reason=business_email_intent.get("reason", ""),
+
+
             first_order_sku_count=first_verified_sku_count, onboarding_value_index=value_index, segment=segment,
             first_delivery_date=order.get("first_verified_delivery_date"),
             reached_by_purpose=contact.get("latest_reached_by_purpose"),
@@ -1441,7 +1353,7 @@ def build_priority_customers(
         positive_window = positive_dialogue_without_order and days_since_reached is not None and days_since_reached <= 45
         focus_key = _focus_key(lifecycle=business_lifecycle, segment=segment, order_count=order_count,
             delivery_count=business_delivery_count, has_future_delivery=bool(future_delivery),
-            positive_signal=positive_window, qualified_email_signal=bool(business_email_intent.get("ready") or business_email_intent.get("waiting")))
+            positive_signal=positive_window, )
         focus_label = ("En leverans, 11–90 dagar sedan"
                        if focus_key == "second_purchase" and business_delivery_count == 1
                        and business_days_since_delivery is not None and 11 <= business_days_since_delivery <= 90
@@ -1523,12 +1435,6 @@ def build_priority_customers(
             "primary_trigger_type": final_trigger if recommendation_eligible else "",
             "primary_trigger_key": final_trigger if recommendation_eligible else "scoring_context",
             "covered_trigger_keys": [final_trigger] if recommendation_eligible else [],
-            "active_email_intent_event": active_email_intent.get("event_id", ""),
-            "decision_context_email_event": (
-                "" if customer_guidance["focus_key"] == "a_prospect"
-                else active_email_intent.get("event_id", "")
-            ),
-            "email_intent_trigger": active_email_intent.get("trigger", ""),
             "planning_status_text": status_text,
             "priority_level": _priority_level(priority_score),
             "priority_type": priority_type,
@@ -1585,10 +1491,7 @@ def build_priority_customers(
             ),
             "has_order_after_latest_contact": has_order_after_latest_contact,
             "self_ordering_signal": bool(contact.get("self_ordering_signal")),
-            "email_priority_status": email_feature.get(
-                "email_followup_status", ""
-            ),
-        })
+            })
 
     result.sort(key=lambda item: (
         -item["work_priority_precise"], -item["business_value_raw"],

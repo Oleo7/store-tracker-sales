@@ -64,8 +64,8 @@ PLANNED_ACTIVITY_COLUMNS = [
 IDENTITY_SHEETS = (
     "contacts",
     "sales_activities",
-    "email_messages",
-    "email_recipients",
+
+
     "order_rows",
     PLANNED_SHEET,
 )
@@ -301,29 +301,6 @@ def analyze_migration(
     else:
         planned_headers, planned_rows = [], []
 
-    email_customer_ids = defaultdict(set)
-    email_message_values = identity_values.get("email_messages")
-    if email_message_values:
-        _email_headers, email_message_rows = dict_rows(
-            email_message_values
-        )
-        for _row_number, row in email_message_rows:
-            email_id = str(row.get("email_id") or "").strip()
-            if not email_id:
-                continue
-            customer_id = str(row.get("customer_id") or "").strip()
-            if customer_id in master_ids:
-                email_customer_ids[email_id].add(customer_id)
-                continue
-            customer = resolve_legacy_customer(
-                row,
-                by_number,
-                by_name,
-            )
-            if customer:
-                email_customer_ids[email_id].add(
-                    customer["customer_id"]
-                )
 
     for title in IDENTITY_SHEETS:
         values = identity_values[title]
@@ -371,20 +348,6 @@ def analyze_migration(
                     orphan_count += 1
                     orphan_rows.append(row_number)
                 continue
-            if title == "email_recipients":
-                inherited_ids = email_customer_ids.get(
-                    str(row.get("email_id") or "").strip(),
-                    set(),
-                )
-                if len(inherited_ids) == 1:
-                    blank_count += 1
-                    proposed += 1
-                    updates.append({
-                        "worksheet": title,
-                        "row": row_number,
-                        "customer_id": next(iter(inherited_ids)),
-                    })
-                    continue
             if not customer_name:
                 continue
             blank_count += 1

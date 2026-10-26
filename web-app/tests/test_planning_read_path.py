@@ -284,16 +284,9 @@ class PlanningReadPathTests(TestCase):
         self.assertEqual(rows[0][1]["status"], "B")
         self.assertEqual(rows[1][1]["status"], "")
 
-    def test_email_route_and_general_snapshots_keep_last_column_semantics(self):
-        email_column = app_module.EMAIL_MESSAGES_COLUMNS[0]
+    def test_route_and_general_snapshots_keep_last_column_semantics(self):
         route_column = "payload_json"
         cases = (
-            (
-                "email_messages",
-                app_module.EMAIL_MESSAGES_COLUMNS,
-                email_column,
-                "B",
-            ),
             (
                 app_module.ROUTE_PROPOSALS_SHEET,
                 app_module.ROUTE_PROPOSAL_COLUMNS,
@@ -431,10 +424,8 @@ class PlanningReadPathTests(TestCase):
 
     def test_all_http_lock_callers_use_route_rule_performance_endpoints(self):
         expected = {
-            "/customers/<int:row>/email-proposal-draft",
-            "/customers/<int:row>/reminder-email-draft",
-            "/customers/<int:row>/email-proposal/send",
-            "/customers/<int:row>/reminder-email/send",
+
+
             "/customers/<path:customer_name>/contacts",
             "/planning/activities",
             "/planning/activities/<activity_id>",
@@ -446,7 +437,7 @@ class PlanningReadPathTests(TestCase):
             "/planning/route-preview",
             "/planning/route-preview-status",
             "/route-proposal",
-            "/api/brevo/reconcile/<secret>",
+
         }
 
         self.assertTrue(expected.issubset(app_module.PERFORMANCE_ENDPOINTS))

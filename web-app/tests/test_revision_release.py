@@ -101,7 +101,6 @@ class CalendarAuditTests(planning_fixture.PlanningApiTestCase):
             self.assertEqual(error[0].get_json()["code"], "route_preview_expired_or_legacy")
         with patch.dict(os.environ, {"CRM_RISKY_OPERATIONS_STOPPED":"true"}):
             for url, method in [("/planning/route-apply","post"), ("/planning/activities","post"),
-                                ("/customers/2/email-proposal/send","post"),
                                 ("/customer-contact-permission","post"), ("/route-proposal","get")]:
                 response = getattr(self.client, method)(url, json={})
                 self.assertEqual(response.status_code, 503, url)

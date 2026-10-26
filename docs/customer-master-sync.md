@@ -98,7 +98,7 @@ coordinates remain blank when absent; raw order addresses are not geocoding
 results.
 
 The existing rename flow updates only customer-name cells in `sales_activities`,
-`email_messages`, `email_recipients` and optional `planned_activities` before the
+optional `planned_activities` before the
 master name. Planning snapshots are updated by UUID, preserving existing
 internal numbers when the order supplies none. Activity IDs, notes, dates and
 owners remain unchanged. Dependent history and customer values are verified

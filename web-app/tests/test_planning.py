@@ -322,8 +322,6 @@ class PlanningApiTestCase(TestCase):
             TESTING=True,
             SECRET_KEY="planning-test-secret",
         )
-        self.original_email_sheets_cache = app_module._email_sheets_cache
-        app_module._email_sheets_cache = None
         self.spreadsheet = default_spreadsheet()
         self.spreadsheet_patcher = patch.object(
             app_module,
@@ -350,7 +348,6 @@ class PlanningApiTestCase(TestCase):
         self.today_patcher.stop()
         self.now_patcher.stop()
         self.spreadsheet_patcher.stop()
-        app_module._email_sheets_cache = self.original_email_sheets_cache
 
     def login(self, user_name="olle"):
         user = next(
@@ -2628,7 +2625,7 @@ class PlanningRouteApiTests(PlanningApiTestCase):
             patch.object(
                 app_module,
                 "build_current_priority_snapshot",
-                return_value=(priorities, {}),
+                return_value=priorities,
             ),
             patch.object(
                 app_module,
@@ -2678,7 +2675,7 @@ class PlanningRouteApiTests(PlanningApiTestCase):
             patch.object(
                 app_module,
                 "build_current_priority_snapshot",
-                return_value=(priorities, {}),
+                return_value=priorities,
             ),
             patch.object(
                 app_module,

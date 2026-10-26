@@ -530,8 +530,7 @@ class StockfillerSyncTests(TestCase):
         headers += ["email", "email_last_order", "city_google", GLN_COLUMN]
         spreadsheet = FakeSpreadsheet({
             "order_rows": [ORDER_COLUMNS], "customers_enriched": [headers],
-            "sales_activities": [["customer"]], "email_messages": [["customer"]], "email_recipients": [["customer"]],
-            STATE_SHEET_NAME: [["key", "value", "updated_at"]],
+            "sales_activities": [["customer"]], STATE_SHEET_NAME: [["key", "value", "updated_at"]],
         })
         source = _api_order("POR26AHGWQP8Q")
         source.update(buyerName="Coop Masthugget", buyerExternalId="", buyerGln=gln,
@@ -569,8 +568,7 @@ class StockfillerSyncTests(TestCase):
         spreadsheet = FakeSpreadsheet({
             "order_rows": [ORDER_COLUMNS] + [list(persisted) for _ in range(3)],
             "customers_enriched": [headers, [manual[h] for h in headers]],
-            "sales_activities": [["customer"]], "email_messages": [["customer"]], "email_recipients": [["customer"]],
-            REVIEW_SHEET_NAME: [["status"], ["needs_review"]],
+            "sales_activities": [["customer"]], REVIEW_SHEET_NAME: [["status"], ["needs_review"]],
             STATE_SHEET_NAME: [["key", "value", "updated_at"]],
         })
         source = _api_order("POR26AHGWQP8Q")
@@ -609,8 +607,7 @@ class StockfillerSyncTests(TestCase):
         spreadsheet = FakeSpreadsheet({
             "order_rows": [ORDER_COLUMNS],
             "customers_enriched": [headers, [existing[h] for h in headers]],
-            "sales_activities": [["customer"]], "email_messages": [["customer"]], "email_recipients": [["customer"]],
-            STATE_SHEET_NAME: [["key", "value", "updated_at"]],
+            "sales_activities": [["customer"]], STATE_SHEET_NAME: [["key", "value", "updated_at"]],
         })
         source = _api_order("UNLINKED")
         source.update(buyerName=existing["customer"], buyerExternalId="", buyerGln="7300121361015",

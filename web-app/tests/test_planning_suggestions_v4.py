@@ -37,30 +37,6 @@ class PlanningSuggestionV4IntegrationTests(PlanningApiTestCase):
             patch.object(app_module, "stockholm_now", return_value=instant),
         )
 
-    def append_click(
-        self, kind="stockfiller", *, email_id="email-v4",
-        sent_at="2026-08-01 09:00:00", clicked_at="2026-08-02 08:00:00"
-    ):
-        app_module.ensure_email_worksheets(self.spreadsheet, include_events=False)
-        message = {
-            "email_id": email_id, "customer_id": "11111111-1111-4111-8111-111111111111",
-            "customer_number": "C-1", "customer": "Butik A",
-            "sent_at": sent_at, "status": "sent", "is_test": "N",
-        }
-        recipient = {
-            "email_id": email_id, "send_status": "sent",
-            "intended_email": "buyer@example.com", "actual_email": "buyer@example.com",
-        }
-        prefix = "stockfiller" if kind == "stockfiller" else "product_sheet"
-        recipient[f"{prefix}_click_count"] = "1"
-        recipient[f"{prefix}_first_clicked_at"] = clicked_at
-        recipient[f"{prefix}_last_clicked_at"] = clicked_at
-        self.spreadsheet.worksheet(app_module.EMAIL_MESSAGES_SHEET).append_row(
-            [message.get(column, "") for column in app_module.EMAIL_MESSAGES_COLUMNS]
-        )
-        self.spreadsheet.worksheet(app_module.EMAIL_RECIPIENTS_SHEET).append_row(
-            [recipient.get(column, "") for column in app_module.EMAIL_RECIPIENTS_COLUMNS]
-        )
 
     def append_order(self, reference, delivered):
         row = {
@@ -86,40 +62,6 @@ class PlanningSuggestionV4IntegrationTests(PlanningApiTestCase):
             [row.get(column, "") for column in app_module.CONTACT_COLUMNS]
         )
 
-
-    def test_later_order_resolves_click_context(self):
-        self.append_click()
-        today_patch, now_patch = self.clock(date(2026, 8, 5))
-        with today_patch, now_patch:
-            suggestion = self.client.get("/planning/suggestions").get_json()["suggestion"]
-        self.append_order("ORDER-AFTER", "2026-08-06")
-        today_patch, now_patch = self.clock(date(2026, 8, 6))
-        with today_patch, now_patch:
-            payload = self.client.get("/planning/suggestions").get_json()
-        self.assertIsNone(payload["suggestion"])
-        stored = self.spreadsheet.worksheet(SUGGESTIONS_SHEET).dict_rows()[0]
-        self.assertEqual(stored["suggestion_id"], suggestion["suggestion_id"])
-        self.assertEqual(stored["status"], "resolved")
-        self.assertEqual(stored["resolved_by_type"], "business_context")
-
-    def test_new_click_creates_new_context_after_old_click_was_dismissed(self):
-        self.append_click()
-        today_patch, now_patch = self.clock(date(2026, 8, 5))
-        with today_patch, now_patch:
-            first = self.client.get("/planning/suggestions").get_json()["suggestion"]
-            self.client.post(
-                f"/planning/suggestions/{first['suggestion_id']}/dismiss",
-                json={"client_request_id": "dismiss-first-click", "expected_revision": first["revision"]},
-            )
-        self.append_click(
-            email_id="email-v4-2", sent_at="2026-08-06 09:00:00",
-            clicked_at="2026-08-06 10:00:00",
-        )
-        today_patch, now_patch = self.clock(date(2026, 8, 9))
-        with today_patch, now_patch:
-            second = self.client.get("/planning/suggestions").get_json()["suggestion"]
-        self.assertEqual(second["trigger_key"], "stockfiller_click_followup")
-        self.assertNotEqual(second["suggestion_id"], first["suggestion_id"])
 
     def test_legacy_followup_is_suggestion_not_planned_activity(self):
         self.append_legacy_followup()

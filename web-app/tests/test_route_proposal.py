@@ -734,11 +734,10 @@ class RouteEndpointTests(TestCase):
             patch.object(app_module, "get_customer_rows", return_value=self.customers),
             patch.object(app_module, "get_contact_rows", return_value=[]),
             patch.object(app_module, "get_order_rows", return_value=[]),
-            patch.object(app_module, "get_email_rows", return_value=([], [], [])),
             patch.object(
                 app_module,
                 "build_current_priority_snapshot",
-                return_value=(self.priorities, {}),
+                return_value=self.priorities,
             ),
             patch.object(
                 app_module,

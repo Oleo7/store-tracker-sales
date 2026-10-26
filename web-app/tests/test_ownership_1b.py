@@ -188,13 +188,11 @@ class Ownership1BTests(TestCase):
             patch.object(app_module, "get_contact_rows", return_value=[]),
             patch.object(app_module, "get_order_rows", return_value=[]),
             patch.object(app_module, "read_customer_state_events", return_value=[]),
-            patch.object(
-                app_module, "get_email_rows", return_value=([], [], [])
-            ),
+            __import__("contextlib").nullcontext(),
             patch.object(
                 app_module,
                 "build_current_priority_snapshot",
-                side_effect=lambda **kwargs: (kwargs["customers"], {}),
+                side_effect=lambda **kwargs: kwargs["customers"],
             ),
         ):
             self.login()
@@ -220,22 +218,11 @@ class Ownership1BTests(TestCase):
                 app_module, "get_customer_rows", return_value=self.customers
             ),
             patch.object(app_module, "get_order_rows") as get_orders,
-            patch.object(
-                app_module, "build_email_proposal_draft"
-            ) as build_draft,
-            patch.object(app_module, "ensure_email_worksheets") as ensure_email,
         ):
             self.login()
             stats = self.client.get("/customers/Other%20Store/stats")
             edit = self.client.patch(
                 "/customers/3/contact", json={"phone": "000"}
-            )
-            draft = self.client.get(
-                "/customers/3/email-proposal-draft"
-            )
-            send = self.client.post(
-                "/customers/3/email-proposal/send",
-                json={"draft_id": "unauthorized-send"},
             )
             contact = self.client.post(
                 "/customers/Other%20Store/contacts",
@@ -251,15 +238,11 @@ class Ownership1BTests(TestCase):
             [
                 stats.status_code,
                 edit.status_code,
-                draft.status_code,
-                send.status_code,
                 contact.status_code,
             ],
-            [404, 404, 404, 404, 404],
+            [404, 404, 404],
         )
         get_orders.assert_not_called()
-        build_draft.assert_not_called()
-        ensure_email.assert_not_called()
 
     def test_old_planning_activity_and_required_route_row_do_not_bypass_owner(self):
         self.login()
@@ -306,13 +289,11 @@ class Ownership1BTests(TestCase):
                 patch.object(app_module, "get_contact_rows", return_value=[]),
                 patch.object(app_module, "get_order_rows", return_value=[]),
                 patch.object(app_module, "read_customer_state_events", return_value=[]),
-                patch.object(
-                    app_module, "get_email_rows", return_value=([], [], [])
-                ),
+                __import__("contextlib").nullcontext(),
                 patch.object(
                     app_module,
                     "build_current_priority_snapshot",
-                    return_value=(self.customers, {}),
+                    return_value=self.customers,
                 ),
             ):
                 payload, error = app_module.calculate_route_proposal_for_user(

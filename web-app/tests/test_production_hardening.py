@@ -96,25 +96,6 @@ class CanonicalOwnershipHardeningTests(PlanningApiTestCase):
         self.assertEqual(stored["status"], "resolved")
         self.assertEqual(stored["resolved_by_id"], "contact-by-another-actor")
 
-    def test_live_email_event_resolves_current_owner_not_sender(self):
-        app_module.app.config["PLANNING_SUGGESTIONS_STUB"] = True
-        self.addCleanup(
-            app_module.app.config.pop, "PLANNING_SUGGESTIONS_STUB", None
-        )
-        self.login("sofia")
-        suggestion = self.client.get(
-            "/planning/suggestions"
-        ).get_json()["suggestion"]
-        app_module.resolve_suggestions_for_email(
-            self.spreadsheet,
-            owner={"user_name": "olle", "name": "Olle"},
-            customer_id=suggestion["customer_id"],
-            email_id="live-email-current-owner",
-        )
-        stored = self.spreadsheet.worksheet(SUGGESTIONS_SHEET).dict_rows()[0]
-        self.assertEqual(stored["status"], "resolved")
-        self.assertEqual(stored["resolved_by_type"], "email")
-        self.assertEqual(stored["resolved_by_id"], "live-email-current-owner")
 
     def test_transfer_resolves_previous_owner_before_new_owner_materializes(self):
         app_module.app.config["PLANNING_SUGGESTIONS_STUB"] = True
@@ -218,19 +199,17 @@ class GlobalScoringHardeningTests(TestCase):
         with (
             patch.object(app_module, "build_order_features", return_value={}),
             patch.object(app_module, "build_contact_features", return_value={}),
-            patch.object(
-                app_module, "build_email_engagement_snapshot", return_value={}
-            ),
+            __import__("contextlib").nullcontext(),
             patch.object(
                 app_module, "build_priority_customers", return_value=scored
             ) as build_scores,
         ):
-            result, _email = app_module.build_current_priority_snapshot(
+            result = app_module.build_current_priority_snapshot(
                 customers=customers,
                 order_rows=[],
                 contact_rows=[],
-                message_rows=[],
-                recipient_rows=[],
+
+
                 today=app_module.stockholm_today(),
                 responsible="Olle",
             )

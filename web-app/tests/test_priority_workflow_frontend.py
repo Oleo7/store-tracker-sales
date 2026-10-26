@@ -7,8 +7,8 @@ from unittest import TestCase, skipUnless
 
 @skipUnless(shutil.which("node"), "Node.js required for actual frontend helpers")
 class PriorityWorkflowFrontendTests(TestCase):
-    def test_planned_email_scope_and_contact_blocks_without_sending(self):
-        script = Path(__file__).with_name("priority_email_frontend.cjs")
+    def test_removed_email_ui_and_preserved_manual_contact_workflow(self):
+        script = Path(__file__).with_name("email_removal_frontend.cjs")
         result = subprocess.run(["node", str(script)], capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

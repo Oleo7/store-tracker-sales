@@ -32,9 +32,9 @@ class SellerBookingIdentityTests(TestCase):
 
     def score(self, customer, users, activities):
         with patch.object(app_module, "stockholm_now", return_value=NOW):
-            priorities, _ = app_module.build_current_priority_snapshot(
+            priorities = app_module.build_current_priority_snapshot(
                 customers=[customer], users=users, order_rows=[], contact_rows=[],
-                message_rows=[], recipient_rows=[], today=NOW.date(),
+                  today=NOW.date(),
                 planned_activity_rows=activities,
             )
         return priorities[0]

@@ -119,7 +119,6 @@ def _decision_context_payload_v1(
     *, owner, customer_id, lifecycle="", order_count=0,
     latest_order_reference="", latest_order_date="", latest_contact_id="",
     latest_contact_result="", latest_contact_date="",
-    active_email_intent_event="",
 ):
     """Original stable context payload used before segment-aware A-prospects."""
     return {
@@ -132,7 +131,7 @@ def _decision_context_payload_v1(
         "latest_contact_id": _text(latest_contact_id),
         "latest_contact_result": _key(latest_contact_result),
         "latest_contact_date": _text(latest_contact_date),
-        "active_email_intent_event": _text(active_email_intent_event),
+        "active_email_intent_event": "",  # Frozen historical hash slot, never a live signal.
     }
 
 
@@ -140,7 +139,6 @@ def legacy_decision_context_hash_v1(
     *, owner, customer_id, lifecycle="", order_count=0,
     latest_order_reference="", latest_order_date="", latest_contact_id="",
     latest_contact_result="", latest_contact_date="",
-    active_email_intent_event="",
 ):
     """Hash a pre-segment decision context for read-only compatibility."""
     return _canonical_hash(_decision_context_payload_v1(
@@ -153,14 +151,14 @@ def legacy_decision_context_hash_v1(
         latest_contact_id=latest_contact_id,
         latest_contact_result=latest_contact_result,
         latest_contact_date=latest_contact_date,
-        active_email_intent_event=active_email_intent_event,
+
     ))
 
 
 def decision_context_hash(*, owner, customer_id, lifecycle="", order_count=0,
                           latest_order_reference="", latest_order_date="",
                           latest_contact_id="", latest_contact_result="",
-                          latest_contact_date="", active_email_intent_event="",
+                          latest_contact_date="",
                           segment=""):
     """Hash stable business facts only; never live score, copy, or wall time."""
     payload = _decision_context_payload_v1(
@@ -173,7 +171,7 @@ def decision_context_hash(*, owner, customer_id, lifecycle="", order_count=0,
         latest_contact_id=latest_contact_id,
         latest_contact_result=latest_contact_result,
         latest_contact_date=latest_contact_date,
-        active_email_intent_event=active_email_intent_event,
+
     )
     # Keep the current schema stable. Compatibility with rows created before
     # this field existed is handled explicitly through compatible hashes.

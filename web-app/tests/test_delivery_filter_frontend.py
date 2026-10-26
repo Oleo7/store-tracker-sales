@@ -22,12 +22,12 @@ const source = name => {
 };
 const context = vm.createContext({assert});
 vm.runInContext(`
-let insights = {}, searchQuery = '', emailClickNoOrderActive = false;
+let insights = {}, searchQuery = '';
 const listWorkFilter = 'all', FOCUS_LABELS = ['retain', 'reactivate'];
 const _sheetValues = {}, chips = [];
 const updateChip = key => chips.push(key);
 const filterState = Object.fromEntries(
-  ['segment','city','region','focus','risk','delivery','latestContact','emailProposal']
+  ['segment','city','region','focus','risk','delivery','latestContact']
     .map(key => [key, new Set()])
 );
 const customers = [
@@ -37,8 +37,7 @@ const customers = [
   {customer_id:'d',customer:'No delivery',city:'Malmo',region_google:'South',customer_segment:'C'},
 ];
 const record = month => ({latest_delivery_month:month,customer_risk:'Aktiv',
-  customer_guidance:{focus_key:'retain'},email_proposal_recipient_count:1,
-  email_proposal_type_label:'Follow up',email_click_without_order:true});
+  customer_guidance:{focus_key:'retain'}});
 const records = {a:record('2026-09'),b:record('2026-08'),c:record('2026-09'),d:{}};
 ${['customerInsightKey','getCustomerInsight','buildDropdowns','buildInsightDropdowns',
    'getFilteredCustomers'].map(source).join('\n')}
@@ -68,7 +67,6 @@ for (const format of ['compact', 'legacy']) {
   for (const [key,value,expected] of [
     ['segment','A',['a']],['city','Malmo',[]],['region','East',['a','c']],
     ['focus','retain',['a','c']],['risk','Aktiv',['a','c']],
-    ['emailProposal','Follow up',['a','c']],
   ]) {
     filterState[key].add(value);
     assert.deepEqual(ids(),expected,format + ' combined ' + key);

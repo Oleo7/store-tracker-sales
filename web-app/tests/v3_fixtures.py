@@ -44,4 +44,4 @@ def current_snapshot(customers, scores, plans=(), contacts=(), orders=(), as_of=
             contact_priority_raw=float(score) if allowed else 0.0)
     return {'customers':customers,'priorities':ps,'order_rows':list(orders),'contact_rows':list(contacts),
             'planned_activity_rows':list(plans),'customer_state':st,'customer_state_events':[],
-            'snapshot_created_at':current.isoformat(),'email_engagement':{}}
+            'snapshot_created_at':current.isoformat(),}

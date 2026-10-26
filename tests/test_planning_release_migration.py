@@ -180,35 +180,9 @@ def migration_spreadsheet(*, unresolved=False, planned_headers=None):
             "City": "" if unresolved else "Göteborg",
         }],
     )
-    email_messages = FakeWorksheet(
-        "email_messages",
-        [
-            "email_id",
-            "customer_id",
-            "customer_number",
-            "customer",
-        ],
-        [{
-            "email_id": "email-1",
-            "customer_id": "",
-            "customer_number": "200",
-            "customer": "Butik B",
-        }],
-    )
-    email_recipients = FakeWorksheet(
-        "email_recipients",
-        ["email_id", "customer_id", "customer"],
-        [{
-            "email_id": "email-1",
-            "customer_id": "",
-            "customer": "Butik B",
-        }],
-    )
     worksheets = [
         customers,
         contacts,
-        email_messages,
-        email_recipients,
     ]
     if planned_headers is not None:
         worksheets.append(
@@ -258,7 +232,7 @@ class PlanningReleaseMigrationTests(TestCase):
             1,
         )
         self.assertEqual(first_apply["blocking_errors"], [])
-        self.assertEqual(first_apply["apply_write_batches"], 4)
+        self.assertEqual(first_apply["apply_write_batches"], 2)
         self.assertTrue(first_apply["idempotent"])
         self.assertEqual(second_apply["apply_write_batches"], 0)
         self.assertTrue(second_apply["idempotent"])
@@ -270,14 +244,6 @@ class PlanningReleaseMigrationTests(TestCase):
                 migration.PLANNED_SHEET
             ).row_values(1),
             migration.PLANNED_ACTIVITY_COLUMNS,
-        )
-        recipient_values = spreadsheet.worksheet(
-            "email_recipients"
-        ).get_all_values()
-        recipient_id_column = recipient_values[0].index("customer_id")
-        self.assertEqual(
-            recipient_values[1][recipient_id_column],
-            CUSTOMER_B_ID,
         )
 
     def test_apply_reorders_safe_planned_schema_without_losing_values(self):
@@ -471,11 +437,11 @@ class PlanningProductionReleaseTests(TestCase):
             planned_headers=migration.PLANNED_ACTIVITY_COLUMNS
         )
         plan = production.build_production_plan(spreadsheet)
-        email_messages = spreadsheet.worksheet("email_messages")
-        customer_id_column = email_messages.row_values(1).index(
+        contacts = spreadsheet.worksheet("contacts")
+        customer_id_column = contacts.row_values(1).index(
             "customer_id"
         )
-        email_messages.values[1][customer_id_column] = CUSTOMER_A_ID
+        contacts.values[1][customer_id_column] = CUSTOMER_B_ID
 
         with self.assertRaises(RuntimeError):
             production.apply_production_plan(spreadsheet, plan)

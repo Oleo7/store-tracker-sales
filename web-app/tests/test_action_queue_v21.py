@@ -24,8 +24,6 @@ class ContactChannelV21Tests(TestCase):
         cases = [
             ({"lifecycle": "prospect", "has_human_contact": False}, "visit"),
             ({"lifecycle": "prospect", "has_human_contact": True}, "phone"),
-            ({"lifecycle": "prospect", "trigger_key": "stockfiller_click_followup"}, "phone"),
-            ({"lifecycle": "prospect", "trigger_key": "product_sheet_click_followup"}, "phone"),
             ({"lifecycle": "established", "overdue_days": 30}, "phone"),
             ({"lifecycle": "established", "overdue_days": 31}, "phone"),
             ({"lifecycle": "established", "overdue_days": 60}, "phone"),

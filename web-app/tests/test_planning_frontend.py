@@ -291,8 +291,8 @@ const planningAttentionOwnerKey=()=> 'olle', renderPlanningAttention=()=>{}, pla
 const mergePlanningAttentionItems=(existing,incoming)=>[...existing,...incoming];
 const currentCustomer=null;
 let insights = {}, insightsLoaded = false, insightsLoadFailed = false, insightsRevision = 0;
-let emailClickNoOrderActive = false, listRenders = 0;
-const filterState = {emailProposal:new Set()};
+let listRenders = 0;
+const filterState = {};
 const elements = new Map();
 const element = id => {
   if (!elements.has(id)) {
@@ -356,7 +356,7 @@ const simulateCriticalWorkflowMutation = async activity => {
   await planningFetchJson('/planning/activities/'+activity.id, {method:'PATCH'});
   await refreshWorkflowViews({ planning: true });
 };
-const buildInsightDropdowns = () => {}, updateEmailClickNoOrderChip = () => {}, updateChip = () => {};
+const buildInsightDropdowns = () => {}, updateChip = () => {};
 const showToast = text => toasts.push(text);
 ${['fetchJsonShared','loadInsights','loadPlanningAttention','loadPlanningWeek','refreshWorkflowViews',
    'activeViewName','showView','renderList','esc','escAttr',
@@ -411,8 +411,6 @@ vm.runInContext(`(async () => {
 
   // A failed secondary request preserves valid insights and filters without a misleading save error.
   const validInsights = insights, validRevision = insightsRevision, toastCount = toasts.length;
-  emailClickNoOrderActive = true;
-  filterState.emailProposal.add('selected');
   first=begin();
   const failedBackground = refreshWorkflowViews({planning:true});
   requests[first].resolve(week('saved')); await tick();
@@ -421,7 +419,6 @@ vm.runInContext(`(async () => {
   assert.deepEqual(planningData.activities,[{id:'saved'}]); assert.equal(planningLoading,false);
   assert.equal(insights,validInsights); assert.equal(insightsRevision,validRevision);
   assert.equal(insightsLoaded,true); assert.equal(insightsLoadFailed,false);
-  assert.equal(emailClickNoOrderActive,true); assert.ok(filterState.emailProposal.has('selected'));
   assert.equal(toasts.length,toastCount); assert.equal(listRenders,1);
 
   // An older week response must neither replace newer state nor trigger a competing insights request.
@@ -543,8 +540,7 @@ vm.runInContext(`(async () => {
   const failedForeground = loadInsights({render:true});
   requests[first].reject(new Error('insights unavailable')); assert.equal(await failedForeground,false);
   assert.equal(insightsForegroundRequests,0); assert.equal(insightsLoaded,false);
-  assert.equal(insightsLoadFailed,true); assert.equal(emailClickNoOrderActive,false);
-  assert.equal(filterState.emailProposal.size,0);
+  assert.equal(insightsLoadFailed,true);
   assert.equal(toasts.at(-1),'Kunde inte ladda kundprioritering');
 
   // Foreground starts before a critical workflow mutation; its old result is followed by one fresh request.
@@ -585,11 +581,9 @@ vm.runInContext(`(async () => {
   lastForegroundResolve({version:'valid-foreground'}); assert.equal(await lastForeground,false);
   assert.equal(insightsForegroundRequests,0); assert.equal(requests.length-first,1);
   const retainedInsights = insights, retainedRevision = insightsRevision, retainedToasts = toasts.length;
-  emailClickNoOrderActive = true; filterState.emailProposal.add('selected');
   requests[first].reject(new Error('deferred insights unavailable')); await tick();
   assert.equal(insights,retainedInsights); assert.equal(insightsRevision,retainedRevision);
   assert.equal(insightsLoaded,true); assert.equal(insightsLoadFailed,false);
-  assert.equal(emailClickNoOrderActive,true); assert.ok(filterState.emailProposal.has('selected'));
   assert.equal(toasts.length,retainedToasts); assert.equal(requests.length-first,1);
   assert.equal(insightsBackgroundRefreshPending,false);
 
@@ -638,12 +632,10 @@ vm.runInContext(`(async () => {
   assert.equal(requests.length-first,8); assert.equal(requests[first+7].path,'/api/customer-insights');
   assert.equal(insights, beforeFailure); assert.equal(insightsRevision,beforeFailureRevision);
   assert.equal(insightsLoaded,true); assert.equal(insightsLoadFailed,false);
-  assert.equal(emailClickNoOrderActive,true); assert.ok(filterState.emailProposal.has('selected'));
   assert.equal(toasts.length,beforeFailureToasts);
   requests[first+7].reject(new Error('deferred background unavailable')); await tick();
   assert.equal(insights,beforeFailure); assert.equal(insightsRevision,beforeFailureRevision);
   assert.equal(insightsLoaded,true); assert.equal(insightsLoadFailed,false);
-  assert.equal(emailClickNoOrderActive,true); assert.ok(filterState.emailProposal.has('selected'));
   assert.equal(toasts.length,beforeFailureToasts); assert.equal(requests.length-first,8);
   assert.equal(insightsBackgroundRequests,0); assert.equal(insightsBackgroundRefreshPending,false);
 
@@ -776,11 +768,9 @@ vm.runInContext(`(async () => {
     assert.equal(sharedJsonRequests.get('/api/customer-insights'),sharedNetworkPromise);
     assert.equal(requests.length-first,4);
     assert.equal(insightsForegroundRequests,1); assert.equal(insightsBackgroundRequests,1);
-    emailClickNoOrderActive=true; filterState.emailProposal.add('selected');
     const retainedSharedInsights = insights, retainedSharedRevision = insightsRevision;
     const retainedSharedHtml = list.innerHTML, retainedSharedRenders = listRenders;
     const retainedSharedToasts = toasts.length, retainedSharedDirty = insightsListRenderPending;
-    const retainedSharedFilter = [...filterState.emailProposal];
     if (rejectSharedRequest) requests[first].reject(new Error('superseded shared request unavailable'));
     else requests[first].resolve(guidancePayload('shared-stale','2026-10-01','act_now','Shared stale guidance'));
     assert.deepEqual(await Promise.all([sharedBackground,sharedForeground]),[false,false]);
@@ -788,7 +778,6 @@ vm.runInContext(`(async () => {
     assert.equal(insightsLoaded,true); assert.equal(insightsLoadFailed,false);
     assert.equal(list.innerHTML,retainedSharedHtml); assert.equal(listRenders,retainedSharedRenders);
     assert.equal(insightsListRenderPending,retainedSharedDirty); assert.equal(toasts.length,retainedSharedToasts);
-    assert.equal(emailClickNoOrderActive,true); assert.deepEqual([...filterState.emailProposal],retainedSharedFilter);
     assert.equal(insightsForegroundRequests,0); assert.equal(insightsBackgroundRequests,1);
     assert.equal(insightsBackgroundRefreshPending,false);
     assert.equal(requests.length-first,5); assert.equal(requests[first+4].path,'/api/customer-insights');
