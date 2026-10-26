@@ -6565,26 +6565,6 @@
   }
 
 
-  function applyConfirmedObligationUpdate(obligation) {
-    if (!obligation?.obligation_id || !obligation?.customer_id) return;
-    // A response started before this write must not restore an older promise.
-    // Calendar saves stay fast; their full model refresh continues in the background.
-    insightsRequestSerial += 1;
-    const customer = customers.find(item => String(item.customer_id) === String(obligation.customer_id));
-    if (!customer) return;
-    const insight = getCustomerInsight(customer);
-    const open = ["open", "scheduled", "needs_review"].includes(obligation.status);
-    const remaining = (insight.open_obligations || []).filter(item => item.obligation_id !== obligation.obligation_id);
-    insight.open_obligations = open ? [...remaining, { ...obligation }] : remaining;
-    if (insight.planning_seed?.obligation_id === obligation.obligation_id) {
-      insight.planning_seed = open ? {
-        ...insight.planning_seed, ...obligation,
-        expected_revision: obligation.revision, obligation_revision: obligation.revision,
-      } : {};
-    }
-    insightsRevision += 1;
-  }
-
 
   function openPlanningView({ date = "" } = {}) {
     const targetDate = planningDateFromKey(date) ? date : (planningSelectedDate || planningTodayKey());

@@ -173,7 +173,11 @@ def build_customer_state(customers, contact_rows, planned_activity_rows, state_e
 
     contacts = [row for row in valid_rows(contact_rows)
                 if instant(row.get("date_time")) and instant(row["date_time"]).timestamp() <= current.timestamp()]
-    saved = latest_state_events(state_events, as_of=current)
+    # Only unambiguous persisted or stable contact identities can be linked to
+    # calendar activities. A duplicate contact ID must not authorize a cross-customer promise.
+    contact_counts = defaultdict(int)
+    for row in contacts:
+        contact_counts[stable_contact_source_id(row)] += 1
     by_contact = {stable_contact_source_id(row): row for row in contacts
                   if contact_counts[stable_contact_source_id(row)] == 1}
     plans = [row for row in valid_rows(planned_activity_rows)
