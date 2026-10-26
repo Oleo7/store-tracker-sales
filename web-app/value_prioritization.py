@@ -407,21 +407,18 @@ def store_contact_guidance(
     latest_attempt_date: date | None, latest_attempt_result: str,
     latest_reached_date: date | None, latest_reached_result: str,
     last_opt_out_date: date | None,
-    latest_follow_up_date: date | None, follow_up_reached_resolved: bool,
     unanswered_sequence_count: int, last_order_date: date | None,
     delivery_count: int, days_since_delivery: int | None,
     overdue_days: int | None, future_delivery: date | None,
     expected_cycle_days: int | None = None,
-    follow_up_has_later_order: bool = False,
-    follow_up_created_date: date | None = None,
     unverified_order_without_delivery: bool = False,
     positive_prospect_signal: bool = False,
     positive_buyer_signal: bool = False,
     pending_unconfirmed_order_date: date | None = None,
     policy: dict = POLICY,
-    latest_attempt_at=None, latest_reached_at=None, follow_up_created_at=None,
-    latest_reached_event_order=None, follow_up_event_order=None,
-    source_contact_id="", reported_order_date=None, latest_verified_delivery_date=None,
+    latest_attempt_at=None, latest_reached_at=None,
+    latest_reached_event_order=None,
+    reported_order_date=None, latest_verified_delivery_date=None,
     first_order_sku_count=None, onboarding_value_index=0, segment="",
     reached_by_purpose=None, completed_by_purpose=None, first_delivery_date=None,
     obligations=None, planned_activity=None, planned_activity_options=(), workflow_suppression=None,
@@ -464,15 +461,6 @@ def store_contact_guidance(
     plans_by_id = {str((p.get("row", p)).get("planned_activity_id") or ""): p for p in all_plans}
     open_items = [dict(item) for item in obligations or ()
                   if str(item.get("status") or "open") in {"open", "scheduled", "needs_review"}]
-    # A legacy date alone is an internal reminder, never agreement evidence.
-    if obligations is None and latest_follow_up_date and not follow_up_reached_resolved:
-        open_items.append({"obligation_id": "legacy-followup:" + str(source_contact_id or latest_follow_up_date),
-                           "source_contact_id": source_contact_id, "status": "open",
-                           "purpose": "internal_followup", "due_date": latest_follow_up_date,
-                           "created_at": follow_up_created_at or follow_up_created_date,
-                           "event_order": follow_up_event_order, "evidence_quality": "legacy_internal_reminder"})
-    internal_reminders = []
-    open_items = [item for item in open_items if item not in internal_reminders]
     for item in open_items:
         item["_due"] = _decision_day(item.get("due_at") or item.get("due_date"))
         linked = plans_by_id.get(str(item.get("planned_activity_id") or ""))
@@ -526,14 +514,10 @@ def store_contact_guidance(
     scope = str(selected.get("source_scope") or ("obligation:" + str(selected["obligation_id"]) if selected.get("obligation_id") else "planned_activity:" + plan_id if booking_selected else ""))
     selected_source = str(selected.get("source_contact_id") or "")
     created = selected.get("agreed_at") or selected.get("source_created_at") or selected.get("created_at")
-    if not created and selected_source and selected_source == str(source_contact_id):
-        created = follow_up_created_at or follow_up_created_date
     created_ts = _decision_moment(created)
     reached_ts = _decision_moment(latest_reached_at or latest_reached_date)
     attempt_ts = _decision_moment(latest_attempt_at or latest_attempt_date)
     selected_order = selected.get("event_order")
-    if selected_order is None and selected_source and selected_source == str(source_contact_id):
-        selected_order = follow_up_event_order
     agreement_evidence = bool(str(plan_row.get("appointment_confirmed") or "").casefold() in {"y", "true", "1", "ja"})
     agreement_after_negative = bool(explicit and agreement_evidence and created_ts is not None and reached_ts is not None and (
         created_ts > reached_ts or (created_ts == reached_ts and selected_order is not None
@@ -572,7 +556,7 @@ def store_contact_guidance(
             overdue_activity_id=(str(selected.get("planned_activity_id") or "") if selected.get("_due") and selected["_due"] < today else ""),
             obligation_ids=obligation_ids, obligation_id=str(selected.get("obligation_id") or ""),
             obligation_revision=selected.get("revision"),
-            source_contact_id=selected_source if explicit else str(source_contact_id or ""),
+            source_contact_id=selected_source if explicit else "",
             explicit_agreement_overrides_negative=agreement_after_negative,
             timing_source="first_order_phase" if delivery_count == 1 and days_since_delivery is not None and 7 <= days_since_delivery <= 90
                 and (code in {"first_order_onboarding", "second_purchase_due"}
