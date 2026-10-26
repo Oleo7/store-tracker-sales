@@ -47,6 +47,26 @@ from priority import build_priority_customers, build_order_features, build_conta
 
 
 class CalendarOnlyModelTests(unittest.TestCase):
+    def test_public_and_state_activity_ids_ignore_stored_legacy_obligation(self):
+        cid = "11111111-1111-4111-8111-111111111111"
+        customers = [{
+            "customer_id": cid, "customer": "Butik A",
+            "sales_person": "Olle", "customer_segment": "A", "row": 2,
+        }]
+        plan = {
+            "planned_activity_id": "calendar-123", "obligation_id": "followup:old-source",
+            "customer_id": cid, "customer": "Butik A", "user_name": "olle",
+            "status": "planned", "source": "follow_up",
+            "source_contact_id": "old-source", "contact_type": "phone",
+            "created_at": "2026-07-20T09:00:00+02:00",
+            "scheduled_at": "2026-07-29T10:00:00+02:00",
+        }
+        now = datetime(2026, 7, 28, 12, tzinfo=ZoneInfo("Europe/Stockholm"))
+        public = application.public_planned_activity(plan, now=now)
+        model = build_customer_state(customers, [], [plan], as_of=now)
+        self.assertEqual(public["obligation_id"], "calendar:calendar-123")
+        self.assertEqual(model["obligations"][cid][0]["obligation_id"], public["obligation_id"])
+
     def test_historical_contact_date_never_becomes_a_promise(self):
         cid = "11111111-1111-4111-8111-111111111111"
         customers = [{"customer_id": cid, "customer": "Butik A",
