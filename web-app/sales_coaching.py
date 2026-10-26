@@ -2565,18 +2565,16 @@ def build_sales_coaching_summary(*, activities, customers, users, order_rows, pl
             valid_planned_by_source_contact[source_contact_id].append(planned)
     positive_with_next_step = []
     for row in positive_three_days_old:
-        has_follow_up = bool(_date(row.get("follow_up_date")))
         has_linked_plan = bool(
             valid_planned_by_source_contact.get(row.get("contact_id"))
         )
         has_order = bool(attribution["contact_to_orders"].get(row.get("contact_id")))
-        if has_follow_up or has_linked_plan or has_order:
+        if has_linked_plan or has_order:
             positive_with_next_step.append(row)
     mature_positive_without_order_or_followup = [
         row for row in positive_three_days_old
         if attribution["maturity"].get(row.get("contact_id")) == "mature"
         and not attribution["contact_to_orders"].get(row.get("contact_id"))
-        and not _date(row.get("follow_up_date"))
         and not valid_planned_by_source_contact.get(row.get("contact_id"))
     ]
 
@@ -2738,8 +2736,7 @@ def build_sales_coaching_summary(*, activities, customers, users, order_rows, pl
         ]
         covered = [
             row for row in assessable
-            if _date(row.get("follow_up_date"))
-            or valid_planned_by_source_contact.get(row.get("contact_id"))
+            if valid_planned_by_source_contact.get(row.get("contact_id"))
             or attribution["contact_to_orders"].get(row.get("contact_id"))
         ]
         return _rate(len(covered), len(assessable))
