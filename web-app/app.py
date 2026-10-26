@@ -5165,6 +5165,16 @@ def get_planning_attention():
         return planning_error("attention_store_unavailable", "Att hantera kunde inte hämtas. Försök igen.", 503)
 
 
+@app.route("/customer-obligations/action", methods=["POST"])
+def mutate_customer_obligation():
+    """Date-only follow-up mutations are retired; use planned activity IDs."""
+    return planning_error(
+        "operation_retired",
+        "Uppföljningen hanteras i kalendern. Uppdatera planeringen i stället.",
+        410,
+    )
+
+
 @app.route("/customer-workflow/action", methods=["POST"])
 def mutate_customer_workflow():
     return planning_error("operation_retired", "Funktionen har tagits bort. Ladda om sidan.", 410)

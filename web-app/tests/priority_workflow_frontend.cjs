@@ -26,10 +26,10 @@ const showContactSaveError=()=>{},updateContactChannelFields=()=>{},updateFollow
 ${['planningDateFromKey','planningDateKeyFromIso','planningTimeFromIso','planningStockholmOffset','planningStockholmIso','planningAttentionItemIsEligible',
 'mergePlanningAttentionItems','loadPlanningAttention','customerCanExecutePlanned',
 'customerCanStartContact','sortedModelValue','getWorkPriorityValue',
-'stableCustomerTieBreak','compareDescendingMissingLast','contactPrioritySort','mapPriorityValue','mapPrioritySort','planningContactTypeKey','getCustomerPlanningSeed','applyConfirmedObligationUpdate','openContactFormForCustomer'].map(source).join('\n')}
+'stableCustomerTieBreak','compareDescendingMissingLast','contactPrioritySort','mapPriorityValue','mapPrioritySort','planningContactTypeKey','getCustomerPlanningSeed','openContactFormForCustomer'].map(source).join('\n')}
 `,context);
 vm.runInContext(`(async()=>{
- const item=(id,date='2026-10-17',extra={})=>({obligation_id:id,customer_id:'customer-1',item_type:'overdue_follow_up',due_date:date,status:'open',...extra});
+ const item=(id,date='2026-10-17',extra={})=>({obligation_id:id,customer_id:'customer-1',item_type:'missed_calendar_activity',planned_activity_id:id,due_date:date,status:'open',...extra});
  assert.equal(planningDateKeyFromIso('2026-10-17T22:30:00Z'),'2026-10-18');
  assert.equal(planningDateKeyFromIso('2026-02-30'),'');
  assert.equal(planningStockholmIso('2026-03-29','02:30'),'');
@@ -76,15 +76,5 @@ vm.runInContext(`(async()=>{
  assert.deepEqual(ranked.map(c=>c.customer),['Booked','Act','Wait']);
  const seed=getCustomerPlanningSeed({planning_seed:{contact_type:'Telefon',source_contact_id:'source',obligation_id:'promise',expected_revision:4,owner_user_name:'olle',note:'Promised phone call',appointment_confirmed:true,picking_help:false},list_guidance:{recommended_contact_type:'phone'}});
  assert.equal(seed.contact_type,'phone');assert.equal(seed.obligation_revision,4);assert.equal(seed.source_contact_id,'source');assert.equal(seed.note,'Promised phone call');assert.equal(seed.appointment_confirmed,true);
- const local={customer_id:'customer-1',open_obligations:[item('keep'),item('saved','2026-10-17',{revision:500})],planning_seed:{obligation_id:'saved',source_contact_row:6,expected_revision:500}};
- customers=[local];
- const confirmed=item('saved','2026-10-17',{revision:12,note:'Confirmed new activity'});
- applyConfirmedObligationUpdate(confirmed);
- assert.equal(local.open_obligations.find(i=>i.obligation_id==='saved').note,confirmed.note,'confirmed server state wins before slow model refresh');
- assert.equal(local.planning_seed.expected_revision,12,'exact server CAS token replaces the old token');
- assert.equal(local.planning_seed.source_contact_row,6);
- assert.equal(insightsRequestSerial,1,'pre-write insight requests are invalidated');
- applyConfirmedObligationUpdate({...confirmed,status:'resolved'});
- assert.deepEqual(local.open_obligations.map(i=>i.obligation_id),['keep']);
  console.log('Priority workflow actual helpers: Stockholm dates, strict attention, owner races, pagination, scope gates, rank and seed PASS');
 })()`,context).catch(error=>{console.error(error);process.exitCode=1});

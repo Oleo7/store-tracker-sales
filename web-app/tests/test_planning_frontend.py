@@ -144,8 +144,8 @@ run().catch(error => { console.error(error); process.exitCode = 1; });
             "renderContactList(stats.contacts, stats.timeline, stats.next_follow_up)",
             self.html,
         )
-        self.assertIn('nextFollowUp.source !== "planned_activity"', self.html)
-        self.assertIn("`${date} · Tid ej satt`", self.html)
+        self.assertNotIn('nextFollowUp.source !== "planned_activity"', self.html)
+        self.assertNotIn("`${date} · Tid ej satt`", self.html)
         self.assertIn('[date, time, type].filter(Boolean).join(" · ")', self.html)
         self.assertNotIn(
             'd-next-followup").textContent = latestContact.follow_up_date',
@@ -833,17 +833,16 @@ vm.runInContext(`(async () => {
         eligibility = re.search(r"function planningAttentionItemIsEligible\(.*?\) \{(.*?)\n  \}", self.html, re.DOTALL)
         self.assertIsNotNone(eligibility)
         body = eligibility.group(1)
-        for token in ["missed_calendar_activity", "overdue_explicit_follow_up", "due >= today", "obligation_id", "customer_id"]:
+        for token in ["missed_calendar_activity", "due >= today", "obligation_id", "customer_id", "planned_activity_id"]:
             self.assertIn(token, body)
         self.assertNotIn("planningSelectedDate", body)
         self.assertNotIn("planningWeekStart", body)
 
     def test_obligation_actions_lock_identity_preserve_revision_and_source(self):
-        for token in ["Kunden är kopplad till denna aktivitet", "obligationSeed.obligation_id",
-                      "obligationSeed.expected_revision", 'payload.action = "reschedule"',
+        for token in ["loadPlanningActivityForItem(item)",
                       "source_contact_id = planningEditorSeed.source_contact_id",
                       "if (!suggestionLocked) setupPlanningCustomerCombobox",
-                      '"/customer-obligations/action"']:
+                      'planningFetchJson(`/planning/activities/${encodeURIComponent(planningActivityId(activity))}`']:
             self.assertTrue(token in self.html, token)
 
     def test_attention_customer_binding_uses_the_verified_identity_helper(self):
@@ -990,7 +989,8 @@ vm.runInContext(`(async () => {
         )
 
     def test_planning_week_omits_legacy_followup_payload(self):
-        self.assertIn('include_followups: "0"', self.html)
+        self.assertNotIn('include_followups: "0"', self.html)
+        self.assertIn("function loadPlanningWeek()", self.html)
 
     def test_drag_drop_uses_pointer_events_handle_and_half_hour_snapping(self):
         self.assertIn('addEventListener("pointerdown", planningDragPointerDown)', self.html)
