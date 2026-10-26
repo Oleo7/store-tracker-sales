@@ -61,6 +61,13 @@ def fingerprint(value):
                                      separators=(",", ":")).encode()).hexdigest()
 
 
+def source_fingerprint(row):
+    """Stable audit fingerprint for a source contact; never uses any follow-up date."""
+    return fingerprint({name: text(row.get(name)) for name in (
+        "customer_id", "date_time", "sales_person", "contact_channel", "comment",
+    )})
+
+
 def contact_anchor(row):
     """Immutable-enough legacy anchor; editable notes/owner/result are not IDs.
 

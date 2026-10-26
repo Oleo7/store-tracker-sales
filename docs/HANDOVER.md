@@ -120,11 +120,13 @@ guide.**
    beroenden som `ACTIVE`, `HISTORICAL_REQUIRED`, `TEST_ONLY` eller `UNUSED`.
 2. Förenkla gamla API-/datakontrakt en kategori i taget, med regressioner för
    befintlig kopia och en separat, explicit migrationsplan om data behöver ändras.
-3. Planera en separat PR för att **helt avveckla `sales_activities.follow_up_date`
-   i `store-tracker-sales`**. Beslutet är fattat för denna nya kodbas, men
-   kolumnen och historikadaptrarna ändras inte i rutt-PR4. Det ursprungliga
-   Polarbär-systemet ligger utanför scope. Kontrollera beroenden i prioritering,
-   analys, kalender och kontaktregistrering innan borttagning.
+3. **PR5 – kalendern äger uppföljningar.** Den nya koden i `store-tracker-sales`
+   ignorerar `sales_activities.follow_up_date`, skriver och speglar inte kolumnen,
+   och skapar inte virtuella uppföljningar av gamla kontaktloggar. Planerade
+   aktiviteter med stabila ID:n är den enda operativa källan. Den gamla
+   datakolumnen i befintlig kopia kan ligga kvar som historiskt rådata tills
+   en separat, verifierad databasmigrering har godkänts; kodmodellen kräver
+   inte kolumnen. Originalets Store Tracker påverkas inte.
 4. Ta ställning till produktens omfattning: vilka Polarbär-specifika analyser,
    produktfält och integrationer ska bli valbara eller tas bort?
 5. Dela senare `app.py` och `index.html` i mindre moduler **utan att samtidigt**
