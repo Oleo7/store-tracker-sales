@@ -73,31 +73,6 @@ class Phase4PriorityContinuityTests(TestCase):
         self.assertEqual(with_history, baseline)
 
 
-class Phase4LegacyFollowupTests(TestCase):
-
-
-    def test_future_explicit_followup_still_blocks_positive_dialogue(self):
-        future_positive = contact(
-            "2026-07-16 10:00:00", result="Positiv",
-            contact_id="future-positive", follow_up="2026-08-10",
-        )
-        baseline = scored(
-            today=date(2026, 8, 5),
-            contacts=[contact(
-                "2026-07-16 10:00:00", result="Neutral",
-                contact_id="future-neutral", follow_up="2026-08-10",
-            )],
-        )[0]
-        item = scored(
-            today=date(2026, 8, 5), contacts=[future_positive],
-
-        )[0]
-        self.assertEqual(item["recommendation_suppression_reason"], "future_follow_up_date")
-        self.assertNotIn("stockfiller_click_followup", item["covered_trigger_keys"])
-        self.assertNotIn("positive_dialogue_followup", item["covered_trigger_keys"])
-        self.assertEqual(item["intent_timing"], round(100 * (item)["work_contact_factor"]))
-
-
 class Phase4CalibrationTests(TestCase):
     def test_score_band_boundaries(self):
         values = {

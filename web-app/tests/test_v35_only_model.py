@@ -118,7 +118,8 @@ class OnlyCurrentModelTests(TestCase):
         source=history.contact(25,'Positiv',follow_up_date=(history.NOW.date()+timedelta(days=2)).isoformat(),
             comment='Kunden best\u00e4ller sj\u00e4lv i Stockfiller')
         row,_=history.model(contacts=[source])
-        self.assertEqual(row['action_type'],'self_ordering_wait')
+        self.assertEqual(row['action_type'],'positive_dialogue_followup')
+        self.assertFalse(row['has_planned_contact'])
 
     def test_legacy_preview_rejected_before_any_source_access_or_write(self):
         with application.app.test_request_context(), patch.object(application,'get_customer_rows',

@@ -120,35 +120,6 @@ class CanonicalOwnershipHardeningTests(PlanningApiTestCase):
             1,
         )
 
-    def test_transferred_legacy_followup_is_visible_only_to_current_owner(self):
-        canonical = app_module.get_customer_by_row(self.spreadsheet, 2)
-        self.append_contact_row(follow_up_purpose="customer_followup", follow_up_agreement_confirmed="Y",
-            customer_id=canonical["customer_id"],
-            sales_person="Olle",
-            follow_up_date="2026-07-30",
-            contact_id="historical-olle-followup",
-        )
-        customers = self.spreadsheet.worksheet("customers_enriched")
-        owner_column = customers.values[0].index("sales_person") + 1
-        customers.update_cell(2, owner_column, "Sofia")
-
-        self.login("sofia")
-        sofia = self.client.get(
-            "/planning/activities?start=2026-07-27&end=2026-08-02"
-        ).get_json()
-        self.login("olle")
-        olle = self.client.get(
-            "/planning/activities?start=2026-07-27&end=2026-08-02"
-        ).get_json()
-        self.assertIn(
-            "historical-olle-followup",
-            {row["source_contact_id"] for row in sofia["unscheduled_followups"]},
-        )
-        self.assertNotIn(
-            "historical-olle-followup",
-            {row["source_contact_id"] for row in olle["unscheduled_followups"]},
-        )
-
     def test_renamed_rows_remain_in_stats_and_same_name_other_id_isolated(self):
         canonical = app_module.get_customer_by_row(self.spreadsheet, 2)
         order_sheet = self.spreadsheet.worksheet("order_rows")

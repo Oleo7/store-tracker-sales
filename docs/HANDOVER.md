@@ -58,7 +58,7 @@ testade PR:er, inte under historikradering.
 | --- | --- | --- |
 | `email_id`, `crm_email` och filtren `is_human_contact` / `is_retired_email_tracking_snapshot` | Hindrar gamla automatiska mejl och klick från att räknas som säljararbete eller ge fel poäng | Separat datarensning och regressionsbevis på både kontakter och historiska rekommendationer |
 | `active_email_intent_event` i gammalt context-hash | Tom kompatibilitetspost som bevarar äldre rekommendations-ID:n | Versionsbyte av ID-format och kontroll av kopplade aktiviteter |
-| Kontaktradens `follow_up_date`, virtuella uppföljningar och `/customer-obligations/action` | Äldre datumuppföljningar saknar egen kalenderpost men kan fortfarande hanteras | Inventera/revidera äldre rader och ersätt adapter med kalenderkontrakt |
+| Eventuell historisk kolumn `sales_activities.follow_up_date`; spärren `/customer-obligations/action` | Datumkolumnen ignoreras operativt. Virtuella uppföljningar är avvecklade och endpointen avvisar gamla mutationsanrop med HTTP 410. | Råkolumnen kan avvecklas separat efter databaskontroll. Ta bort API-spärren först när eventuella externa klientberoenden är utredda. |
 | Rekonstruktion av historiska scoring-snapshots i `sales_coaching.py` | Gamla kontakter saknar exakt loggad V3.5-snapshot | Definiera ny analyssemantik och migrera eller acceptera saknade historiska snapshots |
 | Kundnamnsbaserade insights-svar och versionsheaders | Bakåtkompatibilitet med äldre klientformat | En kontrollerad API-versionsändring och uppdaterade frontend-/replaytester |
 | `legacy_missed_followup` och äldre triggeralias | Historiska planeringsposter och deras relationer | Utred att inga aktiva beslut längre beror på aliasen |
@@ -114,17 +114,41 @@ Alla framtida ändringar görs i `Oleo7/store-tracker-sales` och helst en separa
 PR per riskområde. **Ingen automatisk merge eller deployment följer av denna
 guide.**
 
-## 7. Förslag på fortsatt arbete för kollegan
+## 7. PR5 och förslag på fortsatt arbete för kollegan
 
 1. Starta med kodgranskning och en fristående historik-/API-inventering. Märk
    beroenden som `ACTIVE`, `HISTORICAL_REQUIRED`, `TEST_ONLY` eller `UNUSED`.
 2. Förenkla gamla API-/datakontrakt en kategori i taget, med regressioner för
    befintlig kopia och en separat, explicit migrationsplan om data behöver ändras.
-3. Planera en separat PR för att **helt avveckla `sales_activities.follow_up_date`
-   i `store-tracker-sales`**. Beslutet är fattat för denna nya kodbas, men
-   kolumnen och historikadaptrarna ändras inte i rutt-PR4. Det ursprungliga
-   Polarbär-systemet ligger utanför scope. Kontrollera beroenden i prioritering,
-   analys, kalender och kontaktregistrering innan borttagning.
+3. **PR5 (genomförd) – kalendern äger uppföljningar.** Den nya koden i `store-tracker-sales`
+   ignorerar `sales_activities.follow_up_date`, skriver och speglar inte kolumnen,
+   och skapar inte virtuella uppföljningar av gamla kontaktloggar. Planerade
+   aktiviteter med stabila ID:n är den enda operativa källan. Den gamla
+   datakolumnen i befintlig kopia kan ligga kvar som historiskt rådata tills
+   en separat, verifierad databasmigrering har godkänts; kodmodellen kräver
+   inte kolumnen. Originalets Store Tracker påverkas inte.
+
+   **PR5:s operativa kontrakt och säkerhetsgränser:**
+   - En uppföljning är en faktisk rad i `planned_activities` med ett
+     `planned_activity_id`. Missade aktiviteter, ombokning och Hoppa över
+     använder samma kalenderobjekt. `/customer-obligations/action` returnerar
+     HTTP 410 och skapar inga nya kalender- eller händelserader.
+   - `source_contact_id` kan kopplas till en ny uppföljning endast om det
+     finns exakt en motsvarande kontakt globalt, kunden stämmer och användaren
+     har behörighet. Kontroll och kalenderappend sker under skrivlås.
+   - En kontakt sparas utan datum-mirror. Om kontakten även begär en
+     uppföljning måste kalenderappend lyckas; ett delvis lyckat resultat
+     rapporteras för idempotent retry med samma request-ID.
+   - Historiska datum i den kopierade `sales_activities.follow_up_date`
+     får ligga kvar som rådata men producerar **inte** längre åtgärder.
+     Före framtida driftsättning på en redan använd databas måste ägaren
+     separat inventera äldre datum utan kalenderaktivitet och besluta om
+     eventuella manuella/migrerade uppföljningar. Att mergea PR5 är **inte**
+     samma sak som att godkänna datamigrering eller driftsättning.
+   - PR5:s regressionsgrind omfattar hela Python-/frontend-testsviten samt
+     webbläsartester för dator och mobil, kalenderdrag, prioritering,
+     säljarflöden, ruttplanering och missade kalenderaktiviteter.
+     Inga produktions-Sheets- eller Render-skrivningar ingår.
 4. Ta ställning till produktens omfattning: vilka Polarbär-specifika analyser,
    produktfält och integrationer ska bli valbara eller tas bort?
 5. Dela senare `app.py` och `index.html` i mindre moduler **utan att samtidigt**

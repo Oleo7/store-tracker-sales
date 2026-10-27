@@ -259,7 +259,7 @@ class CustomerGuidanceTests(TestCase):
             now=NOW + timedelta(days=1),
         )
         self.assertEqual(today_guidance["status_key"], "wait")
-        self.assertEqual(tomorrow_guidance["status_key"], "overdue_followup")
+        self.assertEqual(tomorrow_guidance["status_key"], "wait")
 
     def test_real_overdue_followup_comes_from_calendar(self):
         missed = {

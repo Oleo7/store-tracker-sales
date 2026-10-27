@@ -80,8 +80,8 @@ from routing_objective import priority_units, route_objective_key, ROUTE_RANKING
 from customer_obligations import (
     STATE_EVENT_COLUMNS, OPEN_STATUSES as OPEN_OBLIGATION_STATUSES,
     build_customer_state, attention_items, stable_contact_source_id,
-    obligation_id_for_activity, obligation_id_for_contact,
-    latest_state_events, event_payload, event_revision,
+    obligation_id_for_activity,
+    latest_state_events, event_payload,
 )
 from contact_channel import recommend_contact_channel
 from geocoding import geocode_address
@@ -608,17 +608,16 @@ CONTACT_LOG_COLUMNS = [
     "Kanal",
     "Resultat",
     "Kommentar",
-    "Nästa uppföljning",
     "I frysdisken",
 ]
 
 CONTACT_COLUMNS = ["date_time", "sales_person", "customer", "customer_id", "contact_channel", "result",
-                   "comment", "customer_contact_person", "follow_up_date",
+                   "comment", "customer_contact_person",
                    *FREEZER_COLUMNS, "email_id", "contact_id", "planned_activity_id",
                    *CONTACT_ANALYTICS_COLUMNS, "obligation_id", "obligation_outcome", "purpose",
                    "contact_request_fingerprint", "recorded_at", "follow_up_purpose", "follow_up_agreement_confirmed", "onboarding_completed"]
 CONTACT_REQUIRED_COLUMNS = ["date_time", "sales_person", "customer", "contact_channel",
-                            "result", "comment", "customer_contact_person", "follow_up_date"]
+                            "result", "comment", "customer_contact_person"]
 
 USERS_SHEET = "users"
 SETTINGS_SHEET = "settings"
@@ -2817,24 +2816,6 @@ def format_date_value(value, fallback=""):
     return parsed.isoformat() if parsed else fallback
 
 
-def build_latest_contact_followups(contact_rows):
-    latest_by_customer = {}
-    for idx, contact in enumerate(contact_rows):
-        customer_key = normalize_key(contact.get("customer"))
-        if not customer_key:
-            continue
-
-        registered_at = parse_datetime_value(contact.get("date_time")) or datetime.min
-        sort_key = (registered_at, idx)
-        if customer_key not in latest_by_customer or sort_key > latest_by_customer[customer_key][0]:
-            latest_by_customer[customer_key] = (sort_key, contact)
-
-    return {
-        customer_key: parse_date_value(contact.get("follow_up_date"))
-        for customer_key, (_, contact) in latest_by_customer.items()
-    }
-
-
 def parse_number_value(value, default=0.0):
     text = str(value or "").strip()
     if not text:
@@ -2931,7 +2912,6 @@ def build_contact_log_rows(contact_rows):
             "Kanal": text_to_sheet_value(row.get("contact_channel")),
             "Resultat": text_to_sheet_value(row.get("result")),
             "Kommentar": text_to_sheet_value(row.get("comment")),
-            "Nästa uppföljning": format_date_value(row.get("follow_up_date")),
             "I frysdisken": ", ".join(freezer_labels),
             "_month": month_key(parsed_date) if parsed_date else "",
             "_week": week_key(parsed_date) if parsed_date else "",
@@ -3855,7 +3835,6 @@ def planned_contact_id_for_payload(
     follow_up_note,
     follow_up_appointment_confirmed,
     follow_up_picking_help,
-    mirrored_follow_up_date,
 ):
     canonical = json.dumps(
         {
@@ -3893,9 +3872,6 @@ def planned_contact_id_for_payload(
                     follow_up_appointment_confirmed
                 ),
                 "picking_help": bool(follow_up_picking_help),
-                "mirrored_date": str(
-                    mirrored_follow_up_date or ""
-                ).strip(),
             },
         },
         ensure_ascii=False,
@@ -4009,7 +3985,7 @@ def resolve_contact_planned_activity(
     return {"kind": "no_match"}
 
 
-def ensure_followup_source_contact_id(
+def resolve_followup_source_contact_id(
     spreadsheet,
     *,
     customer_name,
@@ -4018,125 +3994,45 @@ def ensure_followup_source_contact_id(
     source_contact_id="",
     owner=None,
 ):
-    sheet = get_worksheet(spreadsheet, "sales_activities")
-    headers = ensure_contact_worksheet_schema(sheet)
+    """Resolve an explicit, uniquely identified contact; never infer one from dates.
+
+    The calendar is authoritative for all follow-up scheduling. Contact source
+    IDs are immutable; this resolver performs no contact-log writes.
+    """
     requested = str(source_contact_id or "").strip()
+    if not requested:
+        return ""
     customers = get_customer_rows(spreadsheet)
     customer_lookup = CustomerLookup(customers)
-    target_customer = resolve_customer(
+    target = resolve_customer(
         customers,
         customer_id=customer_id,
         customer_number=customer_number,
         customer_name=customer_name,
         customer_lookup=customer_lookup,
     )
-    candidate = None
-    exact_candidates = []
-    source_rows = worksheet_snapshot(
-        sheet,
-        expected_columns=CONTACT_COLUMNS,
-        use_cache=False,
-    )[1]
-    for row_index, row in source_rows:
-        if target_customer is None or related_row_customer(
-            row, customers, customer_lookup=customer_lookup
-        ) is not target_customer:
-            continue
-        if owner and not customer_owned_by_user(target_customer, owner):
-            continue
-        contact_id = str(row.get("contact_id") or "").strip()
-        if requested and (contact_id == requested or stable_contact_source_id({**row, "customer_id": str((target_customer or {}).get("customer_id") or "")}) == requested):
-            exact_candidates.append((row_index, row))
-            continue
-        if not requested and str(row.get("follow_up_date") or "").strip():
-            if candidate is None:
-                candidate = (row_index, row)
-                continue
-            current_dt = parse_datetime_value(row.get("date_time")) or datetime.min
-            previous_dt = parse_datetime_value(candidate[1].get("date_time")) or datetime.min
-            if (current_dt, row_index) > (previous_dt, candidate[0]):
-                candidate = (row_index, row)
-
-    if requested and not exact_candidates and requested.startswith("legacy:") and target_customer is not None:
-        state = customer_state_snapshot(spreadsheet, customers=customers)
-        aliases = [item for item in state["obligations"].get(str(target_customer.get("customer_id") or ""), ())
-                   if item.get("source_contact_id") == requested and not item.get("identity_ambiguous")]
-        source_times = {parse_planning_instant(item.get("source_created_at")) for item in aliases}
-        source_times.discard(None)
-        if len(source_times) == 1:
-            source_time = next(iter(source_times))
-            exact_candidates = [(index, row) for index, row in worksheet_snapshot(sheet, expected_columns=CONTACT_COLUMNS)[1]
-                if related_row_customer(row, customers, customer_lookup=customer_lookup) is target_customer
-                and parse_planning_instant(row.get("date_time")) == source_time]
-    if requested:
-        if len(exact_candidates) != 1:
-            return ""
-        candidate = exact_candidates[0]
-    if candidate is None:
+    if target is None or (owner and not customer_owned_by_user(target, owner)):
         return ""
-    row_index, row = candidate
-    contact_id = str(row.get("contact_id") or "").strip()
-    resolved_id = contact_id or requested
-    if resolved_id and any(index != row_index and str(other.get("contact_id") or "").strip() == resolved_id
-                           for index, other in source_rows):
-        return ""
-    if not contact_id:
-        contact_id = requested or stable_contact_source_id({**row, "customer_id": str((target_customer or {}).get("customer_id") or "")})
-        update_sheet_row(
-            sheet,
-            row_index,
-            headers,
-            {"contact_id": contact_id},
-        )
-    return contact_id
-
-
-def sync_followup_date_to_source_contact(
-    spreadsheet,
-    source_contact_id,
-    follow_up_date,
-):
-    requested = str(source_contact_id or "").strip()
-    if not requested:
-        return False
     sheet = get_worksheet(spreadsheet, "sales_activities")
-    headers = ensure_contact_worksheet_schema(sheet)
-    row_index, headers, _ = find_sheet_row(
-        sheet,
-        "contact_id",
-        requested,
-    )
-    if not row_index:
-        return False
-    update_sheet_row(
-        sheet,
-        row_index,
-        headers,
-        {"follow_up_date": str(follow_up_date or "").strip()},
-    )
-    return True
-
-
-def sync_planned_followup_mirror(spreadsheet, activity):
-    if str(activity.get("source") or "").strip().casefold() != "follow_up":
-        return True
-    source_contact_id = str(
-        activity.get("source_contact_id") or ""
-    ).strip()
-    if not source_contact_id:
-        return False
-    if str(activity.get("status") or "planned").strip().casefold() != "planned":
-        return True
-    follow_up_date = ""
-    if str(activity.get("status") or "planned").strip().casefold() == "planned":
-        scheduled = parse_planning_datetime(activity.get("scheduled_at"))
-        if scheduled is None:
-            return False
-        follow_up_date = scheduled.date().isoformat()
-    return sync_followup_date_to_source_contact(
-        spreadsheet,
-        source_contact_id,
-        follow_up_date,
+    indexed = worksheet_snapshot(
+        sheet, expected_columns=CONTACT_COLUMNS, use_cache=False,
+    )[1]
+    # A source contact ID is globally unique, not merely unique per customer.
+    # Reject collisions even if only one of the duplicate rows belongs to the
+    # requested customer; otherwise the activity could acquire ambiguous
+    # cross-customer evidence.
+    matches = [
+        row for _index, row in indexed
+        if str(row.get("contact_id") or "").strip() == requested
+    ]
+    if len(matches) != 1:
+        return ""
+    return (
+        requested
+        if related_row_customer(
+            matches[0], customers, customer_lookup=customer_lookup,
+        ) is target
+        else ""
     )
 
 
@@ -4222,43 +4118,6 @@ def public_unplanned_contact(row, row_index):
         ).strip(),
         "unplanned": True,
     }
-
-
-def build_unscheduled_followup_groups(*, indexed_contacts, activities, customers,
-                                      selected_start, selected_end, today, state_events=(), prepared_state=None, owner_user_name=None):
-    """The same source-scoped promises as attention, including review history."""
-    current = stockholm_now()
-    if current.date() != today:
-        current = datetime.combine(today, datetime_time.max, tzinfo=STOCKHOLM_ZONE)
-    state = prepared_state if prepared_state is not None else build_customer_state(
-        customers, [row for _index, row in indexed_contacts], activities, state_events, as_of=current)
-    source_rows = {stable_contact_source_id(row): index for index, row in indexed_contacts}
-    overdue, upcoming = [], []
-    for obligations in state["obligations"].values():
-        for obligation in obligations:
-            if owner_user_name is not None and normalize_key(obligation.get("owner_user_name")) != normalize_key(owner_user_name):
-                continue
-            if obligation.get("status") not in OPEN_OBLIGATION_STATUSES:
-                continue
-            if obligation.get("planned_activity_id") and obligation.get("status") == "scheduled":
-                continue
-            snooze = parse_planning_instant(obligation.get("snooze_until"))
-            if snooze and snooze > current:
-                continue
-            due = parse_date_value(obligation.get("due_date"))
-            if due is None or (due >= today and not (due <= today + timedelta(days=30) or selected_start <= due <= selected_end)):
-                continue
-            master = next((row for row in customers if row.get("customer_id") == obligation["customer_id"]), {})
-            item = {**obligation, "follow_up_date": due.isoformat(), "customer_key": obligation["customer_id"],
-                    "source_contact_row": source_rows.get(obligation.get("source_contact_id")),
-                    "contact_type": normalize_planning_contact_type(obligation.get("contact_type")) or "phone",
-                    "days_overdue": max(0, (today-due).days),
-                    "review_only": obligation.get("status") == "needs_review",
-                    "priority_score": {"A": 3, "B": 2, "C": 1}.get(str(master.get("customer_segment") or "")[:1].upper(), 0)}
-            (overdue if due < today else upcoming).append(item)
-    for group in (overdue, upcoming):
-        group.sort(key=lambda row: (row["follow_up_date"], -row["priority_score"], row["obligation_id"]))
-    return overdue, upcoming
 
 
 def planning_preview_serializer():
@@ -4369,7 +4228,6 @@ def get_customers():
         customer_lookup=customer_lookup,
     )
     latest_contact = {}
-    latest_contact_followup = build_latest_contact_followups(contact_rows)
     for contact in contact_rows:
         name = normalize_key(contact.get("customer"))
         contact_date = parse_date_value(contact.get("date_time"))
@@ -4383,9 +4241,6 @@ def get_customers():
         customer_key = normalize_key(customer.get("customer"))
         customer["latest_contact_date"] = format_date_value(
             latest_contact.get(customer_key)
-        )
-        customer["follow_up_date"] = format_date_value(
-            latest_contact_followup.get(customer_key)
         )
     return jsonify(visible_customers)
 
@@ -4423,8 +4278,6 @@ def _timeline_contact_item(contact):
     result = str(contact.get("result", "")).strip()
     channel = str(contact.get("contact_channel", "")).strip()
     details = []
-    if contact.get("follow_up_date"):
-        details.append({"label": "Nästa uppföljning", "value": format_date_value(contact["follow_up_date"])})
     return {
         "date_time": str(contact.get("date_time", "")).strip(),
         "event_type": "contact",
@@ -4537,9 +4390,7 @@ def select_next_customer_follow_up(customer, customers, contact_rows, activity_r
                          "contact_type_label": planning_contact_label(contact_type), "planned_activity_id": item["planned_activity_id"]}
             rank = 0
         else:
-            candidate = {"source": "latest_contact", "date": due.isoformat(), "time": "", "contact_type": "",
-                         "contact_type_label": "", "contact_id": item.get("source_contact_id", "")}
-            rank = 1
+            continue
         candidate.update(obligation_id=item["obligation_id"], revision=item["revision"], status=item["status"],
                          source_contact_id=item.get("source_contact_id", ""), snooze_until=item.get("snooze_until", ""))
         candidates.append(((due, rank, scheduled.isoformat() if scheduled else "", item["obligation_id"]), candidate))
@@ -4679,11 +4530,10 @@ def get_customer_stats(customer_name):
     )
     contacts = []
     for c in contact_rows:
-        contact = {k: c[k] for k in ("customer", "date_time", "sales_person", "contact_channel", "result", "comment", "customer_contact_person", "follow_up_date",
+        contact = {k: c[k] for k in ("customer", "date_time", "sales_person", "contact_channel", "result", "comment", "customer_contact_person",
                                      *FREEZER_COLUMNS)}
         contact["_sort_date"] = parse_date_value(c["date_time"]) or date.min
         contact["date_time"] = format_date_value(c["date_time"])
-        contact["follow_up_date"] = format_date_value(c["follow_up_date"])
         contacts.append(contact)
     contacts.sort(key=lambda x: x["_sort_date"], reverse=True)
     for contact in contacts:
@@ -5267,82 +5117,6 @@ def current_customer_for_activity_write(spreadsheet, customer_id, *, owner=None)
     return customer
 
 
-def customer_state_mutation_context(spreadsheet, data):
-    # Mutations validate against source rows freshly loaded inside the write
-    # lock, including edits performed directly in the spreadsheet.
-    invalidate_sheet_cache(spreadsheet, "customers_enriched", "users", "sales_activities",
-                           PLANNED_ACTIVITIES_SHEET, CUSTOMER_STATE_EVENTS_SHEET)
-    if not isinstance(data, dict) or not str(data.get("customer_id") or "").strip():
-        raise CustomerStateConflict("customer_id_required", "Ett stabilt kund-ID krävs.", 400)
-    try:
-        customer = resolve_planning_customer(spreadsheet, data)
-    except CustomerResolutionError as exc:
-        raise CustomerStateConflict(exc.code, str(exc), exc.status) from exc
-    if not (user_is_admin(current_user()) or user_is_seller(current_user())):
-        raise CustomerStateConflict("customer_state_forbidden", "Du saknar behörighet att ändra kundens planering.", 403)
-    if not customer_access_allowed(customer, current_user()):
-        raise CustomerStateConflict("customer_not_found", "Butiken kunde inte hittas.", 404)
-    owner = canonical_owner_for_customer(spreadsheet, customer)
-    if not owner:
-        raise CustomerStateConflict("planning_owner_not_found", "Kundens ansvariga säljare kunde inte verifieras.")
-    requested_owner = str(data.get("owner_user_name") or data.get("user_name") or "").strip()
-    if requested_owner and normalize_key(requested_owner) != normalize_key(owner.get("user_name")):
-        raise CustomerStateConflict("planning_owner_customer_mismatch", "Kunden har bytt ansvarig säljare. Ladda om kunden.")
-    return customer, owner
-
-
-def customer_state_event_identity(kind, customer_id, request_id):
-    request_id = normalize_client_request_id(request_id)
-    if not request_id:
-        raise CustomerStateConflict("client_request_id_required", "Request-ID saknas eller är ogiltigt.", 400)
-    return stable_planning_uuid("customer-state", current_user().get("user_name"), kind, customer_id, request_id)
-
-
-def existing_customer_state_mutation(events, *, kind, customer_id, request_id, fingerprint):
-    event_id = customer_state_event_identity(kind, customer_id, request_id)
-    matches = [row for row in events if str(row.get("event_id") or "") == event_id]
-    if len(matches) > 1:
-        raise CustomerStateConflict("duplicate_state_event", "Tillståndet har dubbla händelser och måste granskas.")
-    if matches and str(matches[0].get("fingerprint") or "") != fingerprint:
-        raise CustomerStateConflict("idempotency_payload_mismatch", "Samma request-ID har redan använts med annat innehåll.")
-    return matches[0] if matches else None
-
-
-def validate_customer_state_revision(data, current):
-    if current.get("identity_ambiguous"):
-        raise CustomerStateConflict("legacy_identity_ambiguous", "Historiska källor delar identitet. Sätt stabila kontakt-ID:n innan de ändras.", 409)
-    try:
-        expected = int(data["expected_revision"])
-    except (KeyError, ValueError, TypeError):
-        raise CustomerStateConflict("expected_revision_required", "Aktuell revision krävs. Ladda om kunden.", 400)
-    if expected != int(current.get("revision") or 0):
-        raise CustomerStateConflict("revision_conflict", "Tillståndet har ändrats. Ladda om kunden och försök igen.", current=current)
-
-
-def append_customer_state_event(spreadsheet, *, kind, entity_id, customer, owner,
-                                request_id, fingerprint, payload, revision, occurred_at=None):
-    event_id = customer_state_event_identity(kind, customer.get("customer_id"), request_id)
-    previous_revisions = [event_revision(event) for event in read_customer_state_events(spreadsheet, use_cache=False)
-                          if event.get("kind") == kind and event.get("entity_id") == entity_id
-                          and event.get("customer_id") == customer.get("customer_id")]
-    # The event sequence is independent of the public obligation CAS token.
-    revision = max(previous_revisions or [0]) + 1
-    now = parse_planning_instant(occurred_at) if occurred_at else stockholm_now()
-    now = now or stockholm_now()
-    row = {
-        "event_id": event_id, "kind": kind, "entity_id": entity_id,
-        "customer_id": customer.get("customer_id"), "owner_user_name": owner.get("user_name"),
-        "actor_user_name": current_user().get("user_name"), "revision": revision,
-        "occurred_at": now.isoformat(), "recorded_at": stockholm_now().isoformat(), "client_request_id": request_id,
-        "fingerprint": fingerprint,
-        "payload_json": json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True),
-    }
-    sheet = get_or_create_worksheet(spreadsheet, CUSTOMER_STATE_EVENTS_SHEET, STATE_EVENT_COLUMNS)
-    append_dict_row(sheet, STATE_EVENT_COLUMNS, row)
-    invalidate_priority_snapshot()
-    return row
-
-
 def enrich_customer_state_priorities(priorities, state, events, owner_names, *, now):
     for priority in priorities:
         cid = str(priority.get("customer_id") or "").strip()
@@ -5406,78 +5180,12 @@ def get_planning_attention():
 
 @app.route("/customer-obligations/action", methods=["POST"])
 def mutate_customer_obligation():
-    """Narrow adapter for date-only legacy follow-ups, never case management."""
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict) or data.get("action") not in {"reschedule", "skip"}:
-        return planning_error("operation_retired", "Använd Logga kontakt, Planera om eller Hoppa över. Ladda om sidan.", 410)
-    try:
-        spreadsheet = get_spreadsheet_with_retry()
-        with planning_write_lock():
-            customer, owner = customer_state_mutation_context(spreadsheet, data)
-            cid, oid = str(customer.get("customer_id") or ""), str(data.get("obligation_id") or "")
-            request_id = data.get("client_request_id")
-            fingerprint = canonical_payload_fingerprint(data)
-            events = read_customer_state_events(spreadsheet, use_cache=False)
-            kind = "activity_skip" if data["action"] == "skip" else "obligation"
-            duplicate = existing_customer_state_mutation(events, kind=kind, customer_id=cid,
-                            request_id=request_id, fingerprint=fingerprint)
-            state = customer_state_snapshot(spreadsheet, events=events)
-            item = next((row for row in state["obligations"].get(cid, []) if row["obligation_id"] == oid), None)
-            if duplicate:
-                return jsonify(ok=True, duplicate=True, obligation=item)
-            if item is None:
-                raise CustomerStateConflict("activity_not_found", "Uppföljningen kunde inte hittas.", 404)
-            activity_id = stable_planning_uuid("legacy-followup", cid, oid, request_id)
-            if item.get("planned_activity_id") and item["planned_activity_id"] != activity_id:
-                raise CustomerStateConflict("use_activity_api", "Ändra den faktiska kalenderaktiviteten.", 409)
-            sheet, headers, rows = write_planned_activity_snapshot(spreadsheet) if data["action"] == "reschedule" else (None, None, [])
-            recovery = next((row for _index, row in rows if row.get("planned_activity_id") == activity_id), None)
-            if recovery:
-                if recovery.get("create_fingerprint") != fingerprint:
-                    raise CustomerStateConflict("idempotency_payload_mismatch", "Request-ID:t hör till en annan bokning.")
-            else:
-                validate_customer_state_revision(data, item)
-                if item["status"] not in OPEN_OBLIGATION_STATUSES:
-                    raise CustomerStateConflict("activity_closed", "Uppföljningen är redan hanterad.", 409)
-            activity = recovery
-            if data["action"] == "skip":
-                cutoff = parse_planning_instant(item.get("due_at") or item.get("due_date"))
-                if cutoff is None or cutoff.date() >= stockholm_today():
-                    raise CustomerStateConflict("not_missed", "Uppföljningen är inte missad.", 409)
-                payload = {"skipped_through_at": cutoff.isoformat()}
-            else:
-                scheduled = parse_planning_datetime(data.get("scheduled_at"))
-                contact_type = normalize_planning_contact_type(data.get("contact_type"))
-                if scheduled is None or scheduled < stockholm_now().replace(second=0, microsecond=0):
-                    raise CustomerStateConflict("invalid_scheduled_at", "Välj en tid idag eller framåt.", 400)
-                if contact_type not in PLANNING_CONTACT_TYPES:
-                    raise CustomerStateConflict("invalid_contact_type", "Välj Besök, Telefon eller Mejl.", 400)
-                if activity is None:
-                    source_contact_id = ensure_followup_source_contact_id(spreadsheet,
-                        customer_name=customer.get("customer"), customer_id=cid,
-                        source_contact_id=item.get("source_contact_id", ""), owner=owner)
-                    if not source_contact_id:
-                        raise CustomerStateConflict("follow_up_source_ambiguous",
-                            "Källkontakten kunde inte identifieras entydigt. Ladda om planeringen.", 409)
-                    activity = build_planned_activity_row(activity_id=activity_id, owner=owner, customer=customer,
-                        contact_type=contact_type, scheduled_at=scheduled, note=data.get("note", item.get("note", "")),
-                        source="follow_up", source_contact_id=source_contact_id,
-                        appointment_confirmed=data.get("appointment_confirmed", False),
-                        picking_help=data.get("picking_help", False), create_fingerprint=fingerprint,
-                        client_request_id=planning_request_scope(current_user(), "legacy-followup", oid, request_id))
-                    append_dict_row(sheet, PLANNED_ACTIVITY_COLUMNS, activity)
-                payload = {**item, "status": "scheduled", "planned_activity_id": activity_id,
-                           "due_at": scheduled.isoformat(), "due_date": scheduled.date().isoformat()}
-            append_customer_state_event(spreadsheet, kind=kind, entity_id=oid, customer=customer, owner=owner,
-                request_id=request_id, fingerprint=fingerprint, payload=payload, revision=int(item["revision"]) + 1)
-            fresh = customer_state_snapshot(spreadsheet)
-            result = next(row for row in fresh["obligations"][cid] if row["obligation_id"] == oid)
-            return jsonify(ok=True, obligation=result, activity=public_planned_activity(activity) if activity else None)
-    except CustomerStateConflict as exc:
-        return customer_state_error(exc)
-    except Exception:
-        app.logger.exception("Could not save legacy follow-up action")
-        return planning_error("activity_store_unavailable", "Åtgärden kunde inte sparas helt. Försök igen med samma request-ID.", 503)
+    """Date-only follow-up mutations are retired; use planned activity IDs."""
+    return planning_error(
+        "operation_retired",
+        "Uppföljningen hanteras i kalendern. Uppdatera planeringen i stället.",
+        410,
+    )
 
 
 @app.route("/customer-workflow/action", methods=["POST"])
@@ -6533,29 +6241,32 @@ def planning_activities():
             if matched.get("status") not in OPEN_OBLIGATION_STATUSES:
                 return planning_error("obligation_closed", "Åtagandet är redan avslutat. Återuppta det först.", 409)
 
-        resolved_source_contact_id = ""
-        if source == "follow_up":
-            resolved_source_contact_id = ensure_followup_source_contact_id(
-                spreadsheet,
-                customer_name=customer.get("customer"),
-                customer_id=customer.get("customer_id"),
-                customer_number=customer.get("customer_number"),
-                source_contact_id=data.get("source_contact_id"),
-                owner=owner,
-            )
-            if not resolved_source_contact_id:
-                return planning_error(
-                    "follow_up_source_not_found",
-                    "Uppföljningen kunde inte kopplas till den ursprungliga kontakten.",
-                    409,
-                    field="source_contact_id",
-                )
-
         with planning_write_lock():
             try:
                 customer = current_customer_for_activity_write(spreadsheet, customer["customer_id"], owner=owner)
             except (CustomerStateConflict, CustomerResolutionError) as exc:
                 return planning_error(exc.code, str(exc), exc.status)
+
+            # Resolve the source after the authoritative owner refresh and
+            # under the same write lock as the calendar append. Never use
+            # an earlier cached contact identity for a new booking.
+            resolved_source_contact_id = ""
+            if source == "follow_up":
+                resolved_source_contact_id = resolve_followup_source_contact_id(
+                    spreadsheet,
+                    customer_name=customer.get("customer"),
+                    customer_id=customer.get("customer_id"),
+                    customer_number=customer.get("customer_number"),
+                    source_contact_id=data.get("source_contact_id"),
+                    owner=owner,
+                )
+                if not resolved_source_contact_id:
+                    return planning_error(
+                        "follow_up_source_not_found",
+                        "Uppföljningen kunde inte kopplas till den ursprungliga kontakten.",
+                        409,
+                        field="source_contact_id",
+                    )
 
             sheet, _headers, existing_rows = write_planned_activity_snapshot(
                 spreadsheet
@@ -6619,22 +6330,6 @@ def planning_activities():
                             409,
                             activity=public_planned_activity(existing),
                         )
-                    try:
-                        mirror_synced = sync_planned_followup_mirror(
-                            spreadsheet,
-                            existing,
-                        )
-                    except Exception:
-                        app.logger.exception(
-                            "Could not repair follow-up mirror on create retry"
-                        )
-                        mirror_synced = False
-                    if not mirror_synced:
-                        return planning_error(
-                            "follow_up_mirror_failed",
-                            "Aktiviteten sparades men uppföljningsdatumet kunde inte synkas. Försök igen med samma request-ID.",
-                            503,
-                        )
                     return jsonify({
                         "ok": True,
                         "duplicate": True,
@@ -6679,22 +6374,6 @@ def planning_activities():
                 app.logger.exception("Could not save planned activity")
                 return planning_error("planning_store_unavailable", "Aktiviteten kunde inte sparas. Försök igen med samma request-ID.", 503)
 
-            try:
-                mirror_synced = sync_planned_followup_mirror(
-                    spreadsheet,
-                    row_data,
-                )
-            except Exception:
-                app.logger.exception(
-                    "Activity saved but follow-up mirror failed"
-                )
-                mirror_synced = False
-            if not mirror_synced:
-                return planning_error(
-                    "follow_up_mirror_failed",
-                    "Aktiviteten sparades men uppföljningsdatumet kunde inte synkas. Försök igen med samma request-ID.",
-                    503,
-                )
         return jsonify({
             "ok": True,
             "duplicate": False,
@@ -6908,102 +6587,6 @@ def planning_activities():
         reverse=True,
     )
 
-    include_followups = str(
-        request.args.get("include_followups", "1")
-    ).strip().casefold() not in {"0", "false", "no"}
-    unscheduled_followups = []
-    try:
-        contact_rows_only = [row for _row_index, row in owner_contacts]
-        contact_features = (
-            build_contact_features(
-                contact_rows_only,
-                build_order_features(get_order_rows(spreadsheet)),
-            )
-            if include_followups else {}
-        )
-        active_followup_customer_keys = set()
-        for _row_index, row in owner_activities_all:
-            if (
-                str(row.get("source") or "").strip().casefold() != "follow_up"
-                or str(row.get("status") or "").strip().casefold()
-                not in {"planned", "completed"}
-            ):
-                continue
-            active_followup_customer_keys.update({
-                normalize_key(row.get("customer_key")),
-                normalize_key(row.get("customer")),
-            })
-        active_followup_customer_keys.discard("")
-        for customer_key, feature in contact_features.items():
-            follow_up_date = feature.get("latest_follow_up_date")
-            if (
-                not follow_up_date
-                or feature.get("follow_up_resolved")
-                or not start_date <= follow_up_date <= end_date
-                or normalize_key(customer_key) in active_followup_customer_keys
-            ):
-                continue
-            source_index = None
-            source_row = None
-            for row_index, row in owner_contacts:
-                if (
-                    normalize_key(row.get("customer")) == normalize_key(customer_key)
-                    and parse_date_value(row.get("follow_up_date")) == follow_up_date
-                ):
-                    if source_index is None or row_index > source_index:
-                        source_index, source_row = row_index, row
-            if source_row is None:
-                continue
-            customer = related_row_customer(
-                source_row,
-                planning_customers,
-                customer_lookup=planning_customer_lookup,
-            )
-            unscheduled_followups.append({
-                "customer": str(source_row.get("customer") or "").strip(),
-                "customer_key": normalize_key(customer_key),
-                "customer_row": customer.get("row") if customer else None,
-                "customer_number": (
-                    str(customer.get("customer_number") or "").strip()
-                    if customer else ""
-                ),
-                "follow_up_date": follow_up_date.isoformat(),
-                "source_contact_id": str(
-                    source_row.get("contact_id") or ""
-                ).strip(),
-                "source_contact_row": source_index,
-                "latest_contact_result": feature.get(
-                    "latest_contact_result", ""
-                ),
-                "contact_type": normalize_planning_contact_type(
-                    source_row.get("contact_channel")
-                ),
-                "note": str(
-                    feature.get("latest_contact_comment") or ""
-                ).strip(),
-            })
-    except Exception:
-        app.logger.warning(
-            "Could not build unscheduled legacy follow-ups",
-            exc_info=True,
-        )
-
-    unscheduled_followups_overdue, unscheduled_followups_upcoming = (
-        build_unscheduled_followup_groups(
-            indexed_contacts=owner_contacts,
-            activities=[row for _row_index, row in owner_activities_all],
-            customers=planning_customers,
-            selected_start=start_date,
-            selected_end=end_date,
-            today=stockholm_today(),
-            state_events=read_customer_state_events(spreadsheet),
-            prepared_state=activity_state, owner_user_name=owner.get("user_name"),
-        ) if include_followups else ([], [])
-    )
-    unscheduled_followups = (
-        unscheduled_followups_overdue + unscheduled_followups_upcoming
-    )
-
     summaries = planning_day_summaries(
         start_date,
         end_date,
@@ -7056,15 +6639,6 @@ def planning_activities():
         "days": {item["date"]: item for item in summaries},
         "available_users": available_users,
         "unplanned_contacts": unplanned_contacts,
-        "unscheduled_followups_overdue": unscheduled_followups_overdue,
-        "unscheduled_followups_upcoming": unscheduled_followups_upcoming,
-        "unscheduled_followups": sorted(
-            unscheduled_followups,
-            key=lambda item: (
-                item.get("follow_up_date") or "",
-                item.get("customer") or "",
-            ),
-        ),
     }
     record_performance_step(
         "calculation.planning",
@@ -7268,22 +6842,6 @@ def update_planning_activity(activity_id):
                     "Samma request-ID har redan använts med ett annat innehåll.",
                     409,
                     activity=public_planned_activity(current),
-                )
-            try:
-                mirror_synced = sync_planned_followup_mirror(
-                    spreadsheet,
-                    current,
-                )
-            except Exception:
-                app.logger.exception(
-                    "Could not repair follow-up mirror on update retry"
-                )
-                mirror_synced = False
-            if not mirror_synced:
-                return planning_error(
-                    "follow_up_mirror_failed",
-                    "Aktiviteten är uppdaterad men uppföljningsdatumet kunde inte synkas. Försök igen med samma request-ID.",
-                    503,
                 )
             try:
                 sync_suggestion_from_activity(
@@ -7510,22 +7068,6 @@ def update_planning_activity(activity_id):
         )
         update_sheet_row(sheet, row_index, headers, updates)
         updated = {**current, **updates}
-        try:
-            mirror_synced = sync_planned_followup_mirror(
-                spreadsheet,
-                updated,
-            )
-        except Exception:
-            app.logger.exception(
-                "Activity updated but follow-up mirror failed"
-            )
-            mirror_synced = False
-        if not mirror_synced:
-            return planning_error(
-                "follow_up_mirror_failed",
-                "Aktiviteten är uppdaterad men uppföljningsdatumet kunde inte synkas. Försök igen med samma request-ID.",
-                503,
-            )
         try:
             sync_suggestion_from_activity(
                 spreadsheet,
@@ -13229,11 +12771,6 @@ def add_contact(customer_name):
         planning_contact_label(contact_type)
         if contact_type else str(data.get("contact_channel") or "").strip()
     )
-    mirrored_follow_up_date = (
-        follow_up_at.date().isoformat()
-        if follow_up_enabled and follow_up_at
-        else str(data.get("follow_up_date") or "").strip()
-    )
     if planned_activity_id:
         contact_id = planned_contact_id_for_payload(
             owner=owner,
@@ -13255,7 +12792,6 @@ def add_contact(customer_name):
                 follow_up_appointment_confirmed
             ),
             follow_up_picking_help=follow_up_picking_help,
-            mirrored_follow_up_date=mirrored_follow_up_date,
         )
     elif client_request_id:
         contact_id = stable_planning_uuid(
@@ -13479,7 +13015,6 @@ def add_contact(customer_name):
                 "customer_contact_person": text_to_sheet_value(
                     data.get("customer_contact_person")
                 ),
-                "follow_up_date": "" if follow_up_enabled else mirrored_follow_up_date,
                 "contact_id": contact_id,
                 "planned_activity_id": planned_activity_id,
                 "purpose": str(data.get("purpose") or ""),
@@ -13632,8 +13167,6 @@ def add_contact(customer_name):
                     )
                     append_dict_row(follow_sheet, PLANNED_ACTIVITY_COLUMNS, follow_up_activity)
                     follow_up_saved = True
-                if follow_up_saved and not sync_planned_followup_mirror(spreadsheet, follow_up_activity):
-                    raise RuntimeError("Uppföljningen sparades men datumvisningen kunde inte synkas. Försök igen.")
             except Exception as exc:
                 app.logger.exception("Contact saved but follow-up append failed")
                 partial_errors.append({

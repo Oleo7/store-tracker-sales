@@ -4232,7 +4232,6 @@
   let planningAttention = { items: [], total: 0, nextOffset: 0, owner: "", asOf: "", loaded: false, error: null, invalidCount: 0 };
   let planningAttentionLoading = false;
   let planningAttentionRequestSerial = 0;
-  const planningAttentionRequestIds = new Map();
   let planningEditorActivity = null;
   let planningEditorCustomer = null;
   let planningEditorSeed = null;
@@ -5309,9 +5308,6 @@
   function formatNextFollowUp(nextFollowUp) {
     const date = String(nextFollowUp?.date || "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "—";
-    if (nextFollowUp.source !== "planned_activity") {
-      return `${date} · Tid ej satt`;
-    }
     const time = String(nextFollowUp.time || "").trim() || "Tid ej satt";
     const type = String(nextFollowUp.contact_type_label || "").trim();
     return [date, time, type].filter(Boolean).join(" · ");
@@ -5347,8 +5343,7 @@
       document.getElementById("d-act-channel").textContent       = lc.channel || lc.contact_channel || "—";
       document.getElementById("d-act-result").textContent        = lc.title || lc.result || "—";
       document.getElementById("d-act-contactperson").textContent = lc.recipient || lc.customer_contact_person || "—";
-      const nextFollowup = (lc.details || []).find(item => item.label === "Nästa uppföljning")?.value;
-      document.getElementById("d-act-nextfollowup").textContent  = nextFollowup || lc.follow_up_date || "—";
+      document.getElementById("d-act-nextfollowup").textContent = formatNextFollowUp(nextFollowUp);
     } else {
       latestSection.style.display = "none";
     }
@@ -6017,7 +6012,6 @@
       contact_channel:    channel,
       result:             document.getElementById("f-result").value,
       comment:            document.getElementById("f-comment").value,
-      follow_up_date:     followupEnabled ? followupDate : "",
       follow_up: followupEnabled ? {
         enabled: true,
         contact_type: followupType,
@@ -6407,12 +6401,12 @@
   }
 
   function planningAttentionItemIsEligible(item, today = planningTodayKey()) {
-    if (!["missed_calendar_activity", "overdue_follow_up", "overdue_explicit_follow_up"].includes(item?.item_type)) return false;
+    if (item?.item_type !== "missed_calendar_activity") return false;
     if (!String(item?.obligation_id || "").trim() || !String(item?.customer_id || "").trim()) return false;
     if (["resolved", "cancelled", "skipped", "superseded"].includes(item.status)) return false;
     const due = planningDateKeyFromIso(item.due_date || item.due_at);
     if (!due || due >= today) return false;
-    if (item.item_type === "missed_calendar_activity" && !item.planned_activity_id) return false;
+    if (!item.planned_activity_id) return false;
     return true;
   }
 
@@ -6498,14 +6492,13 @@
     const errorHtml = planningAttention.error ? `<div class="planning-state" role="alert"><strong>Kunde inte uppdatera missade aktiviteter</strong>${esc(String(planningAttention.error.message || "Kontrollera anslutningen.").replace(/att hantera/gi, "missade aktiviteter"))}<br><button class="planning-compact-btn" id="planning-attention-retry" type="button">Försök igen</button>${items.length ? "<div>Senast hämtade ärenden visas nedan.</div>" : ""}</div>` : "";
     const invalidHtml = planningAttention.invalidCount ? '<div class="planning-state" role="alert">Underlaget innehöll ärenden som inte kunde verifieras. Ladda om eller be administratören kontrollera underlaget.</div>' : "";
     const body = items.map((item, index) => {
-      const missed = item.item_type === "missed_calendar_activity";
       const customer = planningCustomerForItem(item);
       const canLog = Boolean(customer);
       const type = PLANNING_CONTACT_TYPES[item.contact_type]?.label || "Kontakttyp behöver väljas";
       const date = planningFormatDate(planningDateKeyFromIso(item.due_date || item.due_at), { year: true });
       const time = item.due_at ? planningTimeFromIso(item.due_at) : "";
       return `<article class="planning-attention-item" data-obligation-id="${escAttr(item.obligation_id)}">
-        <div class="planning-backlog-meta"><strong>${missed ? "Missad aktivitet" : item.review_only ? "Granska uppföljning" : "Förfallen uppföljning"}</strong></div>
+        <div class="planning-backlog-meta"><strong>Missad aktivitet</strong></div>
         <button class="planning-backlog-customer" type="button" data-attention-action="customer" data-attention-index="${index}" ${customer ? "" : "disabled"}>${esc(item.customer || customer?.customer || "Kund saknas")}</button>
         <div class="planning-backlog-meta">${esc(date)}${time ? ` kl. ${esc(time)}` : ""} · ${esc(type)}</div>
         ${item.note ? `<div class="planning-attention-note">${esc(item.note)}</div>` : ""}
@@ -6530,7 +6523,7 @@
     const known = getPlanningActivity(id);
     if (known) return known;
     const date = planningDateKeyFromIso(item.due_at || item.due_date);
-    const params = new URLSearchParams({ start: date, end: date, include_followups: "0" });
+    const params = new URLSearchParams({ start: date, end: date });
     if (userIsAdmin() && item.owner_user_name) params.set("user_name", item.owner_user_name);
     const payload = await planningFetchJson(`/planning/activities?${params.toString()}`);
     const source = payload?.data || payload;
@@ -6550,25 +6543,13 @@
 
       } else if (action === "reschedule") {
         if (!await selectPlanningOwnerForCustomer(customer)) return;
-        const activity = item.planned_activity_id ? await loadPlanningActivityForItem(item) : null;
-        openPlanningEditor({ customer, activity, date: planningTodayKey(), seed: { ...item, expected_revision: item.revision, original_due_date: item.original_due_date || item.due_date } });
+        const activity = await loadPlanningActivityForItem(item);
+        openPlanningEditor({ customer, activity, date: planningTodayKey(), seed: { ...item, expected_revision: item.revision, original_due_date: item.due_date } });
       } else if (action === "skip") {
-        if (item.planned_activity_id) {
-          const activity = await loadPlanningActivityForItem(item);
-          await updatePlanningActivityStatus(activity, "skipped");
-        } else {
-          const requestKey = JSON.stringify([item.obligation_id, item.revision, "skip"]);
-          const requestId = planningAttentionRequestIds.get(requestKey) || planningClientRequestId("skip-followup");
-          planningAttentionRequestIds.set(requestKey, requestId);
-          await planningFetchJson("/customer-obligations/action", {method:"POST", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({customer_id:item.customer_id, obligation_id:item.obligation_id, action:"skip",
-              expected_revision:item.revision, client_request_id:requestId})});
-          planningAttentionRequestIds.delete(requestKey);
-          insightsRequestSerial += 1;
-          await refreshWorkflowViews({ planning: true });
-        }
+        const activity = await loadPlanningActivityForItem(item);
+        await updatePlanningActivityStatus(activity, "skipped");
       } else if (action === "log") {
-        const activity = item.planned_activity_id ? await loadPlanningActivityForItem(item) : null;
+        const activity = await loadPlanningActivityForItem(item);
         openContactFormForCustomer(customer, { activity, obligation: item, returnView: "planning" });
       }
     } catch (error) {
@@ -6577,27 +6558,6 @@
     } finally {
       if (button && document.body.contains(button)) button.disabled = false;
     }
-  }
-
-
-  function applyConfirmedObligationUpdate(obligation) {
-    if (!obligation?.obligation_id || !obligation?.customer_id) return;
-    // A response started before this write must not restore an older promise.
-    // Calendar saves stay fast; their full model refresh continues in the background.
-    insightsRequestSerial += 1;
-    const customer = customers.find(item => String(item.customer_id) === String(obligation.customer_id));
-    if (!customer) return;
-    const insight = getCustomerInsight(customer);
-    const open = ["open", "scheduled", "needs_review"].includes(obligation.status);
-    const remaining = (insight.open_obligations || []).filter(item => item.obligation_id !== obligation.obligation_id);
-    insight.open_obligations = open ? [...remaining, { ...obligation }] : remaining;
-    if (insight.planning_seed?.obligation_id === obligation.obligation_id) {
-      insight.planning_seed = open ? {
-        ...insight.planning_seed, ...obligation,
-        expected_revision: obligation.revision, obligation_revision: obligation.revision,
-      } : {};
-    }
-    insightsRevision += 1;
   }
 
 
@@ -6680,7 +6640,6 @@
       const params = planningOwnerQuery(new URLSearchParams({
         start: planningWeekStart,
         end: planningAddDays(planningWeekStart, 6),
-        include_followups: "0",
       }));
       const payload = await planningFetchJson(`/planning/activities?${params.toString()}`);
       if (requestSerial !== planningLoadSerial) return false;
@@ -6694,9 +6653,6 @@
         ...source,
         activities: (source.activities || source.items || []).map(normalizePlanningActivity),
         unplanned_contacts: source.unplanned_contacts || source.unplanned || [],
-        unscheduled_followups: source.unscheduled_followups || source.unscheduled_follow_ups || [],
-        unscheduled_followups_overdue: source.unscheduled_followups_overdue || [],
-        unscheduled_followups_upcoming: source.unscheduled_followups_upcoming || [],
         day_summaries: source.day_summaries || source.days || [],
         available_users: source.available_users || source.users || [],
       };
@@ -7988,7 +7944,6 @@
     if (new Date(scheduledAt).getTime() < Math.floor(Date.now() / 60000) * 60000) { showPlanningEditorError("Välj en tid idag eller framåt."); return; }
     if (note.length > PLANNING_NOTE_MAX_LENGTH) { showPlanningEditorError(`Anteckningen får vara högst ${PLANNING_NOTE_MAX_LENGTH} tecken.`); return; }
     const editing = Boolean(planningEditorActivity);
-    const obligationSeed = !editing && planningEditorSeed?.obligation_id ? { ...planningEditorSeed } : null;
     const payload = {
       customer_id: customer.customer_id, contact_type: contactType, scheduled_at: scheduledAt, note,
       appointment_confirmed: ["visit", "phone"].includes(contactType) && document.getElementById("planning-editor-appointment").checked,
@@ -8009,20 +7964,14 @@
         payload.source_contact_id = planningEditorSeed.source_contact_id;
         payload.source_contact_row = planningEditorSeed.source_contact_row;
       }
-      if (obligationSeed) {
-        payload.obligation_id = obligationSeed.obligation_id;
-        payload.action = "reschedule";
-        payload.expected_revision = Number(obligationSeed.expected_revision ?? obligationSeed.obligation_revision ?? obligationSeed.revision ?? 0);
-      }
     }
     button.disabled = true;
     const originalLabel = button.textContent;
     button.textContent = "Sparar…";
     try {
       const path = editing ? `/planning/activities/${encodeURIComponent(planningActivityId(planningEditorActivity))}`
-        : obligationSeed ? "/customer-obligations/action" : "/planning/activities";
+        : "/planning/activities";
       const result = await planningFetchJson(path, { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (result.obligation) applyConfirmedObligationUpdate(result.obligation);
       closePlanningModal();
       planningSelectedDate = dateKey;
       planningWeekStart = planningStartOfWeek(dateKey);

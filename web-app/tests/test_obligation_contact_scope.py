@@ -19,6 +19,13 @@ class ObligationContactScopeTests(PlanningApiTestCase):
         # grant permission for every earlier promise still in the CRM.
         self.append_contact_row(customer_id=CID, contact_id="new-agreement", date_time="2026-07-20 09:00",
                                 result="Negativ", follow_up_date="2026-07-25", follow_up_purpose="customer_followup", follow_up_agreement_confirmed="Y")
+        for aid, due, contact_id in [
+            ("old-calendar", "2026-07-26T09:00:00+02:00", "older-promise"),
+            ("new-calendar", "2026-07-25T09:00:00+02:00", "new-agreement"),
+        ]:
+            self.append_planning_row(planned_activity_id=aid, scheduled_at=due,
+                source="follow_up", source_contact_id=contact_id,
+                created_at="2026-07-20T09:00:00+02:00")
 
     def snapshot(self):
         return app_module.get_authoritative_priority_snapshot(self.spreadsheet, today=NOW.date(), as_of=NOW)

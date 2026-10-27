@@ -161,17 +161,7 @@ class DialogueAndStrategicPhase3Tests(TestCase):
                 )[0]
                 self.assertEqual(item["primary_trigger_type"], expected)
 
-    def test_explicit_followup_suppresses_positive_dialogue(self):
-        row = contact("Prospect", "2026-07-10 09:00", "Positiv", "followup")
-        row["follow_up_date"] = "2026-07-25"
-        item = priorities(
-            [customer("Prospect", "prospect", "A")],
-            contacts=[row], today=date(2026, 7, 20),
-        )[0]
-        self.assertFalse(item["recommendation_eligible"])
-        self.assertEqual(item["recommendation_suppression_reason"], "future_follow_up_date")
-        self.assertNotIn("positive_dialogue_followup", item["covered_trigger_keys"])
-
+    def test_calendar_activity_suppresses_positive_dialogue(self):
         activity_contact = contact(
             "Prospect", "2026-07-10 09:00", "Positiv", "activity"
         )
@@ -231,7 +221,7 @@ class DialogueAndStrategicPhase3Tests(TestCase):
             "negative_contact_cooldown",
         )
 
-    def test_future_activity_and_followup_suppress_strategic_contact(self):
+    def test_future_calendar_activity_suppresses_strategic_contact(self):
         today = date(2026, 7, 20)
         customer_row = customer("Strategic", "strategic", "A")
         planned = priorities(
@@ -256,19 +246,6 @@ class DialogueAndStrategicPhase3Tests(TestCase):
             "future_planned_activity",
         )
 
-        followup_contact = contact(
-            "Strategic", "2026-06-01 09:00", "Neutral", "followup"
-        )
-        followup_contact["follow_up_date"] = "2026-07-25"
-        followup = priorities(
-            [customer_row], contacts=[followup_contact], today=today
-        )[0]
-        self.assertEqual(followup["primary_trigger_type"], "")
-        self.assertEqual(followup["customer_guidance"]["status_key"], "wait")
-        self.assertFalse(followup["recommendation_eligible"])
-        self.assertEqual(
-            followup["recommendation_suppression_reason"], "future_follow_up_date"
-        )
 
     def test_routine_eligibility_has_no_score_floor_and_name_does_not_set_segment(self):
         today = date(2026, 7, 20)

@@ -939,62 +939,6 @@ class PlanningActivityApiTests(PlanningApiTestCase):
         self.assertEqual(summary_by_date["2026-07-29"]["cancelled"], 1)
         self.assertEqual(len(body["days"]), 7)
 
-    def test_get_retains_unplanned_history_without_promoting_internal_dates(self):
-        legacy_headers = list(app_module.CONTACT_REQUIRED_COLUMNS)
-        legacy = FakeWorksheet(
-            "sales_activities",
-            legacy_headers,
-            [
-                {
-                    "date_time": "2026-07-27 09:00",
-                    "sales_person": "Olle",
-                    "customer": "Butik A",
-                    "contact_channel": "Telefon",
-                    "result": "Positiv",
-                    "comment": "Oplanerat samtal",
-                    "follow_up_date": "2026-07-31",
-                },
-                {
-                    "date_time": "2026-07-27 09:30",
-                    "sales_person": "Sofia",
-                    "customer": "Butik B",
-                    "contact_channel": "Telefon",
-                    "result": "Positiv",
-                    "comment": "Privat",
-                    "follow_up_date": "2026-07-31",
-                },
-            ],
-        )
-        self.spreadsheet.sheets["sales_activities"] = legacy
-
-        response = self.client.get(
-            "/planning/activities?start=2026-07-27&end=2026-08-02"
-        )
-
-        self.assertEqual(response.status_code, 200, response.get_json())
-        body = response.get_json()
-        self.assertEqual(len(body["unplanned_contacts"]), 1)
-        self.assertEqual(
-            body["unplanned_contacts"][0]["customer"],
-            "Butik A",
-        )
-        # A plain old next-contact date is scheduling context on the customer,
-        # not evidence of an independently promised customer followup.
-        self.assertEqual(len(body["unscheduled_followups"]), 1)
-        self.assertEqual(body["unscheduled_followups"][0]["due_at"], "")
-        day_summary = next(
-            item
-            for item in body["day_summaries"]
-            if item["date"] == "2026-07-27"
-        )
-        self.assertEqual(day_summary["unplanned_count"], 1)
-        self.assertEqual(day_summary["planned_activity_count"], 0)
-        self.assertEqual(day_summary["activity_count"], 1)
-        headers = legacy.row_values(1)
-        self.assertNotIn("contact_id", headers)
-        self.assertNotIn("planned_activity_id", headers)
-        self.assertEqual(legacy.update_cell_count, 0)
-
     def test_patch_moves_activity_and_retry_is_idempotent(self):
         seeded = self.append_planning_row(planned_activity_id="move-me")
         payload = {
@@ -1139,7 +1083,7 @@ class PlanningActivityApiTests(PlanningApiTestCase):
         self.assertEqual(stale_retry.get_json()["error"], "planning_changed")
         self.assertEqual(self.planning_rows()[0]["note"], "Version B")
 
-    def test_followup_create_retry_repairs_legacy_date_mirror(self):
+    def test_followup_create_and_retry_never_mirror_contact_date(self):
         self.append_contact_row()
         contact_sheet = self.spreadsheet.worksheet("sales_activities")
         contact_sheet.fail_next_batch_update = RuntimeError(
@@ -1155,20 +1099,15 @@ class PlanningActivityApiTests(PlanningApiTestCase):
         partial = self.client.post("/planning/activities", json=payload)
         repaired = self.client.post("/planning/activities", json=payload)
 
-        self.assertEqual(partial.status_code, 503, partial.get_json())
-        self.assertEqual(
-            partial.get_json()["error"],
-            "follow_up_mirror_failed",
-        )
+        self.assertEqual(partial.status_code, 201, partial.get_json())
         self.assertEqual(repaired.status_code, 200, repaired.get_json())
         self.assertTrue(repaired.get_json()["duplicate"])
         self.assertEqual(len(self.planning_rows()), 1)
-        self.assertEqual(
-            self.contact_rows()[0]["follow_up_date"],
-            "2026-08-01",
-        )
+        self.assertEqual(self.planning_rows()[0]["scheduled_at"], "2026-08-01T10:00+02:00")
+        self.assertNotIn("follow_up_date", self.contact_rows()[0])
+        self.assertIsNotNone(contact_sheet.fail_next_batch_update)
 
-    def test_followup_patch_retry_repairs_legacy_date_mirror(self):
+    def test_followup_patch_and_retry_never_mirror_contact_date(self):
         self.append_contact_row()
         seeded = self.append_planning_row(
             planned_activity_id="followup-patch-repair",
@@ -1194,17 +1133,12 @@ class PlanningActivityApiTests(PlanningApiTestCase):
             json=payload,
         )
 
-        self.assertEqual(partial.status_code, 503, partial.get_json())
-        self.assertEqual(
-            partial.get_json()["error"],
-            "follow_up_mirror_failed",
-        )
+        self.assertEqual(partial.status_code, 200, partial.get_json())
         self.assertEqual(repaired.status_code, 200, repaired.get_json())
         self.assertTrue(repaired.get_json()["duplicate"])
-        self.assertEqual(
-            self.contact_rows()[0]["follow_up_date"],
-            "2026-08-02",
-        )
+        self.assertEqual(self.planning_rows()[0]["scheduled_at"], "2026-08-02T11:00+02:00")
+        self.assertNotIn("follow_up_date", self.contact_rows()[0])
+        self.assertIsNotNone(contact_sheet.fail_next_batch_update)
 
 
     def test_customer_id_wins_over_tampered_row_cache(self):
@@ -1585,98 +1519,6 @@ class PlanningActivityApiTests(PlanningApiTestCase):
             },
         )
 
-    def test_later_same_customer_contact_preserves_separate_overdue_promise(self):
-        self.append_contact_row(follow_up_purpose="customer_followup", follow_up_agreement_confirmed="Y",
-            contact_id="followup-overdue",
-            customer_id="11111111-1111-4111-8111-111111111111",
-            follow_up_date="2026-06-01",
-            comment="Äldre separat uppföljning",
-        )
-        self.append_contact_row(follow_up_purpose="customer_followup", follow_up_agreement_confirmed="Y",
-            contact_id="followup-outside-week",
-            customer_id="11111111-1111-4111-8111-111111111111",
-            follow_up_date="2026-08-15",
-            comment="Kommande separat uppföljning",
-        )
-
-        response = self.client.get(
-            "/planning/activities?start=2026-07-27&end=2026-08-02"
-        )
-
-        self.assertEqual(response.status_code, 200, response.get_json())
-        body = response.get_json()
-        self.assertNotIn(
-            "followup-overdue",
-            [
-                item["source_contact_id"]
-                for item in body["unscheduled_followups_overdue"]
-            ],
-        )
-        self.assertIn(
-            "followup-outside-week",
-            [
-                item["source_contact_id"]
-                for item in body["unscheduled_followups_upcoming"]
-            ],
-        )
-
-    def test_overdue_followup_remains_after_unrelated_contact(self):
-        self.append_contact_row(follow_up_purpose="customer_followup", follow_up_agreement_confirmed="Y",
-            contact_id="followup-resolved-by-contact",
-            customer_id="11111111-1111-4111-8111-111111111111",
-            date_time="2026-05-01 09:00",
-            follow_up_date="2026-05-15",
-        )
-        self.append_contact_row(follow_up_purpose="customer_followup", follow_up_agreement_confirmed="Y",
-            contact_id="later-contact",
-            customer_id="11111111-1111-4111-8111-111111111111",
-            date_time="2026-06-01 09:00",
-            follow_up_date="",
-        )
-
-        response = self.client.get(
-            "/planning/activities?start=2026-07-27&end=2026-08-02"
-        )
-
-        self.assertEqual(response.status_code, 200, response.get_json())
-        self.assertNotIn(
-            "followup-resolved-by-contact",
-            [
-                item["source_contact_id"]
-                for item in response.get_json()["unscheduled_followups_overdue"]
-            ],
-        )
-
-    def test_overdue_followup_remains_with_unrelated_future_plan(self):
-        self.append_contact_row(follow_up_purpose="customer_followup", follow_up_agreement_confirmed="Y",
-            contact_id="followup-resolved-by-plan",
-            customer_id="11111111-1111-4111-8111-111111111111",
-            date_time="2026-05-01 09:00",
-            follow_up_date="2026-05-15",
-        )
-        created = self.client.post(
-            "/planning/activities",
-            json=self.manual_payload(
-                client_request_id="future-plan-resolves-overdue",
-                scheduled_at="2026-08-03T09:00:00+02:00",
-            ),
-        )
-        self.assertEqual(created.status_code, 201, created.get_json())
-
-        response = self.client.get(
-            "/planning/activities?start=2026-07-27&end=2026-08-02"
-        )
-
-        self.assertEqual(response.status_code, 200, response.get_json())
-        self.assertNotIn(
-            "followup-resolved-by-plan",
-            [
-                item["source_contact_id"]
-                for item in response.get_json()["unscheduled_followups_overdue"]
-            ],
-        )
-
-
 class PlanningContactCompletionTests(PlanningApiTestCase):
     def setUp(self):
         super().setUp()
@@ -2031,7 +1873,7 @@ class PlanningContactCompletionTests(PlanningApiTestCase):
         self.assertEqual(followup["source_contact_id"], contact["contact_id"])
         self.assertEqual(followup["contact_type"], "visit")
         self.assertEqual(followup["scheduled_at"], "2026-08-01T10:30+02:00")
-        self.assertEqual(contact["follow_up_date"], "2026-08-01")
+        self.assertNotIn("follow_up_date", contact)
 
     def test_booked_visit_completion_preserves_flag_and_creates_booked_followup(self):
         for followup_type in ("visit", "phone", "email"):

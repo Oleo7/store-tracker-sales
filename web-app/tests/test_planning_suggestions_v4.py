@@ -68,7 +68,7 @@ class PlanningSuggestionV4IntegrationTests(PlanningApiTestCase):
         today_patch, now_patch = self.clock(date(2026, 8, 2))
         with today_patch, now_patch:
             payload = self.client.get("/planning/suggestions").get_json()
-        self.assertEqual(payload["suggestion"]["trigger_key"], "overdue_planned_activity")
+        self.assertNotEqual((payload.get("suggestion") or {}).get("trigger_key"), "overdue_planned_activity")
         self.assertEqual(self.planning_rows(), [])
 
 

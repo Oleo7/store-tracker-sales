@@ -25,6 +25,12 @@ def install_priority_workflow_fixtures(app_module, spreadsheet):
         stores = {}
         customer_sheet = spreadsheet.worksheet("customers_enriched")
         contacts = spreadsheet.worksheet("sales_activities")
+        # Simulate the copied CRM with its retained historical column.
+        # PR5 must read these rows without treating their dates as work.
+        if "follow_up_date" not in contacts.values[0]:
+            contacts.values[0].append("follow_up_date")
+            for old_row in contacts.values[1:]:
+                old_row.append("")
         orders = spreadsheet.worksheet("order_rows")
         plans = spreadsheet.worksheet(app_module.PLANNED_ACTIVITIES_SHEET)
         owner = app_module.find_active_user(spreadsheet, "olle")
@@ -70,22 +76,30 @@ def install_priority_workflow_fixtures(app_module, spreadsheet):
                 "Total": "1000", "Currency": "SEK", "Article": "Polarbar",
             })
 
-        def plan(label, days, channel="phone", source_contact_id="", confirmed=False, picking=False):
-            identifier = f"qa-plan-{names.index(label) + 1}"
+        def plan(label, days, channel="phone", source_contact_id="", confirmed=False, picking=False,
+                 suffix="", created_at=None):
+            identifier = f"qa-plan-{names.index(label) + 1}{suffix}"
             scheduled = (now + timedelta(days=days)).replace(hour=10 if days else 1, minute=0, second=0, microsecond=0)
             row = app_module.build_planned_activity_row(
                 activity_id=identifier, owner=owner, customer=stores[label], contact_type=channel,
                 scheduled_at=scheduled, note=f"Syntetisk planering {label}",
                 source="follow_up" if source_contact_id else "manual",
                 source_contact_id=source_contact_id, appointment_confirmed=confirmed, picking_help=picking,
+                created_at=created_at,
                 client_request_id=f"qa-seed-{identifier}",
             )
             append(plans, row)
             return identifier
 
-        contact("Löfte", 12, due=today - timedelta(days=1))
-        contact("Granska", 240, due=today - timedelta(days=200))
+        source = contact("Löfte", 12, due=today - timedelta(days=1))
+        plan("Löfte", -1, source_contact_id=source,
+             created_at=(now - timedelta(days=11)).isoformat())
+        source = contact("Granska", 240, due=today - timedelta(days=200))
+        plan("Granska", -200, source_contact_id=source,
+             created_at=(now - timedelta(days=239)).isoformat())
         contact("Bokad", 240, due=today - timedelta(days=200), suffix="-older-promise")
+        # This historical date intentionally has no calendar activity.
+        contact("Kontaktbesked", 12, due=today - timedelta(days=1))
         plan("Kalender igår", -1, "visit", confirmed=True, picking=True)
         plan("Dagens aktivitet", 0, "email")
         for age in [35, 65, 95]:
@@ -95,7 +109,10 @@ def install_priority_workflow_fixtures(app_module, spreadsheet):
         order("Orderpaus", 2, 120)
         if app_module.request.args.get("pagination") == "1":
             for index in range(61):
-                contact("Löfte", 13 + index, due=today - timedelta(days=1), suffix=f"-page-{index}")
+                source = contact("Löfte", 13 + index, due=today - timedelta(days=1), suffix=f"-page-{index}")
+                plan("Löfte", -1, source_contact_id=source,
+                     suffix=f"-page-{index}",
+                     created_at=(now - timedelta(days=12 + index)).isoformat())
         app_module._sheet_read_cache.clear()
         return {"ok": True, "stores": stores, "today": today.isoformat()}
 

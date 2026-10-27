@@ -2919,11 +2919,11 @@ class SnapshotAndAggregateTests(TestCase):
 
     def test_followup_and_planning_drilldowns_match_each_card(self):
         rows = [
-            activity("success", "2026-08-01 10:00", follow_up_date="2026-08-05"),
+            activity("success", "2026-08-01 10:00"),
             activity("gap", "2026-08-02 10:00"),
         ]
         planned = [
-            {"planned_activity_id": "on-time", "scheduled_at": "2026-08-03T10:00:00", "status": "completed", "completed_contact_id": "success", "user_name": "olle", "customer": "Nytt namn", "customer_id": "customer-1", "contact_type": "phone"},
+            {"planned_activity_id": "on-time", "scheduled_at": "2026-08-03T10:00:00", "status": "completed", "completed_contact_id": "success", "source_contact_id": "success", "user_name": "olle", "customer": "Nytt namn", "customer_id": "customer-1", "contact_type": "phone"},
             {"planned_activity_id": "overdue", "scheduled_at": "2026-08-04T10:00:00", "status": "planned", "user_name": "olle", "customer": "Nytt namn", "customer_id": "customer-1", "contact_type": "visit"},
             {"planned_activity_id": "skipped", "scheduled_at": "2026-08-05T10:00:00", "status": "skipped", "user_name": "olle", "customer": "Nytt namn", "customer_id": "customer-1", "contact_type": "email"},
         ]

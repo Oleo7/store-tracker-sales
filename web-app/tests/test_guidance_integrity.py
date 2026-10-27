@@ -156,7 +156,7 @@ class GuidanceIntegrityTests(TestCase):
             g=scored(store=customer('A'),planned=planned)['customer_guidance']
             self.assertEqual(g['status_key'],status)
             self.assertIn('Telefon',g['reason_text'])
-        for days,status in [(1,'wait'),(-1,'overdue_followup')]:
+        for days,status in [(1,'wait'),(-1,'wait')]:
             g=scored(store=customer('A'),contacts=[contact(10,'Neutral',
                      (TODAY+timedelta(days=days)).isoformat())])['customer_guidance']
             self.assertEqual(g['status_key'],status)

@@ -135,30 +135,3 @@ class CanonicalPriorityIdentityTests(TestCase):
 
         self.assertEqual(result["order_count"], 1)
         self.assertEqual(result["latest_human_contact_id"], "legacy-contact")
-
-    def test_other_customer_order_does_not_resolve_followup(self):
-        customers = [
-            customer("cid-1", "100", "Samma butik", 2),
-            customer("cid-2", "200", "Samma butik", 3),
-        ]
-        followup = contact("cid-1", "Samma butik", "contact-1", "2026-07-01 10:00")
-        followup["follow_up_date"] = "2026-07-10"
-        result = score(
-            customers,
-            orders=[order("cid-2", "200", "Samma butik", "B", "2026-07-15")],
-            contacts=[followup],
-        )
-
-        self.assertTrue(result["cid-1"]["follow_up_due"])
-        self.assertFalse(result["cid-1"]["has_order_after_latest_contact"])
-
-    def test_renamed_later_order_resolves_followup_by_customer_id(self):
-        followup = contact("cid-1", "Gammalt namn", "contact-1", "2026-07-01 10:00")
-        followup["follow_up_date"] = "2026-07-10"
-        result = score(
-            [customer("cid-1", "100", "Nytt namn", 2)],
-            orders=[order("cid-1", "100", "Ännu ett namn", "later", "2026-07-15")],
-            contacts=[followup],
-        )["cid-1"]
-        self.assertTrue(result["follow_up_due"])
-        self.assertTrue(result["has_order_after_latest_contact"])
