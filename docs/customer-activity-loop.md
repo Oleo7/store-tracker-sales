@@ -8,15 +8,15 @@ Utgångspunkt: master `3c6df7f6cc7d2d0732734a98fea521f847a9d723` (PR #50). Ändr
 
 Missade aktiviteter har ett passerat **datum i Europe/Stockholm**. Dagens aktiviteter hör till agendan. Kontaktens verkliga tid styr vilka tidigare missar den ersätter; `recorded_at` styr när kontakten blev känd i en snapshot. Alla jämförelser av händelseordning använder verkliga tidsinstanter, även under den upprepade timmen vid vintertidsomställningen.
 
-En senare kontakt (Positiv, Neutral, Negativ, Ej anträffbar eller Order lagd!) ersätter tidigare missar för samma säkert identifierade kund. Endast den faktiskt kopplade kalenderaktiviteten kan bli genomförd. Övriga får lässtatus `superseded`; källraderna skrivs inte om. Ej anträffbar och Order lagd! blir inte nådd dialog. Importerade order och tekniska mejlhändelser hanterar inte missar. Ett verifierat skickat kalendermejl kan slutföra just sin bokade aktivitet enligt det befintliga utskickskontraktet och räknas inte som nådd dialog.
+En senare kontakt (Positiv, Neutral, Negativ, Ej anträffbar eller Order lagd!) ersätter tidigare missar för samma säkert identifierade kund. Endast den faktiskt kopplade kalenderaktiviteten kan bli genomförd. Övriga får lässtatus `superseded`; källraderna skrivs inte om. Ej anträffbar och Order lagd! blir inte nådd dialog. Importerade order och tekniska mejlhändelser hanterar inte missar. Den här Sales-versionen skickar inga automatiska mejl. Manuellt loggade mejlkontakter följer samma regler som andra faktiska kontakter.
 
 En sparad ny aktivitet eller verklig omplanering ersätter tidigare missar vid **beslutstillfället**, inte vid den framtida bokningens datum. Andra framtida aktiviteter bevaras. En anteckningsändring är inget planeringsbeslut. Avbokning av en ersättande aktivitet gör inte gamla missar aktuella igen.
 
 Hoppa över på den senaste missen täcker den missen och äldre missar. En äldre överhoppning täcker inte en nyare miss; en framtida överhoppning är ingen kontakt. Återställning kan öppna den felaktigt överhoppade kalenderaktiviteten igen utan att återuppliva den äldre gruppen. Historiken visar överhoppad respektive ersatt aktivitet, utan extra genomföranden eller fabricerade kontaktloggar.
 
-`attention_items()` väljer en representativ senaste miss per kund-ID och aktuell kanonisk kundägare före sökning, sortering, total och paginering. Kundlistan, vägledningen, nästa uppföljning, kalendern, mejlbesluten och båda ruttmotorerna använder samma projektion. Aktuell ägare får åtkomst till tidigare säljares kundarbete; historiska källrader behåller sin attribution.
+`attention_items()` väljer en representativ senaste miss per kund-ID och aktuell kanonisk kundägare före sökning, sortering, total och paginering. Kundlistan, vägledningen, nästa uppföljning, kalendern, kontaktflödet och båda ruttmotorerna använder samma projektion. Aktuell ägare får åtkomst till tidigare säljares kundarbete; historiska källrader behåller sin attribution.
 
-Den kommersiella DFP-modellen, vikterna, normaliseringen, kontaktkurvorna och order-/leveransreglerna är kvar. Automatisk väntan kan begränsa rekommenderad utgående kontakt och utskick, men spärrar inte registrering av verklig kontakt, omplanering eller överhoppning.
+Den kommersiella DFP-modellen, vikterna, normaliseringen, kontaktkurvorna och order-/leveransreglerna är kvar. Automatisk väntan kan begränsa rekommenderad utgående kontakt, men spärrar inte registrering av verklig kontakt, omplanering eller överhoppning.
 
 ## Skrivvägar och sparsäkerhet
 
@@ -24,15 +24,16 @@ Borttagna POST-vägar svarar **410 operation_retired**, utan tillståndsmutation
 
 - `/customer-workflow/action`
 - `/customer-contact-permission`
+- `/customer-obligations/action` (PR5: datumuppföljningsadaptern är avvecklad)
 - `/planning/suggestions/<id>/snooze`, `/dismiss` och `/resume`
 
 Kontaktformulärets gamla åtagandeutfall, behörighetsbesked och åtaganderevisioner avvisas med 410. Gamla separata överenskommelsefält i kontaktens uppföljning och vanliga aktivitets-API:er avvisas också; historiska sådana flaggor påverkar inte kontaktpolicyn. Endast faktisk `appointment_confirmed` kan ge bokningsspecifik tidspolicy. Historiska kontaktresultat ändras inte till andra resultat. Direkta PATCH-anrop till `completed` kräver fortsatt kontaktloggning; `route_pending` kan inte aktiveras med vanlig statusändring.
 
-Verkliga aktiviteter flyttas och hoppas över genom vanliga aktivitets-API:er med deras revisioner. `/customer-obligations/action` är en begränsad övergångsadapter för säkert identifierade **uppföljningsdatum utan kalenderpost**: endast `reschedule` och `skip`. Den skapar vid omplanering en riktig aktivitet, utan godtycklig tid eller kundbekräftelse på det gamla datumet. Request-ID, fingeravtryck och revisionskontroll skyddar mot dubletter och förlorade ändringar. Ett partiellt adaptersparande kan återhämtas även om senare kontakt sparats.
+Verkliga aktiviteter flyttas och hoppas över genom `/planning/activities/<activity_id>` med förväntad revision, request-ID och idempotent återförsök. `/customer-obligations/action` returnerar enbart HTTP 410 `operation_retired` och skriver inga data. `planned_activities` är den enda operativa källan för uppföljningstid, missad aktivitet och omplanering. Datum utan en kalenderaktivitet skapar varken påminnelser eller virtuella åtaganden.
 
 Kundmaster och aktuell ägare kontrolleras på nytt under skrivlåset för kontakt och ny planering. Kalenderändringar hämtar också aktuell kundmaster. Ett cachat kort eller en förhandsvisning kan inte ge rätt att skriva till en borttagen kund. Befintliga gemensamma lås, driftspärrar, ruttens källkontroller, obligatoriska återläsning och karantän av ofärdiga ruttposter är kvar.
 
-Vid kontakt plus uppföljning sparas kontaktens datumvisning först utan en preliminär bokning. När aktiviteten sparats synkas datumvisningen. Om uppföljningen misslyckas svarar API:t 207 med `contact_saved=true` och `follow_up.saved=false`. UI låser det redan sparade underlaget och återförsöker samma request-ID. Timeout efter faktisk kontaktskrivning återanvänder den sparade kontakten. Ingen gammal miss försvinner från enbart klientavsikt.
+Vid kontakt plus uppföljning sparas en kontakt i `sales_activities` och en faktisk kalenderaktivitet i `planned_activities`. Ingen kontaktbaserad `follow_up_date` skrivs eller speglas tillbaka. Om kalenderdelen misslyckas svarar API:t 207 med `contact_saved=true` och `follow_up.saved=false`. UI låser det redan sparade underlaget och återförsöker samma request-ID. Timeout efter faktisk kontaktskrivning återanvänder den sparade kontakten. Ingen miss försvinner från enbart klientavsikt.
 
 ## Äldre data och cache
 
@@ -41,7 +42,7 @@ Två tekniska kolumner tillkommer på befintliga aktivitetsrader vid normala skr
 - `planning_decided_at`: skapande eller verklig ändring av genomförandetid. Befintlig `created_at` är konservativ fallback för äldre data; `updated_at` används inte som bevis på omplanering.
 - `skipped_through_at`: den valda missens tidsgräns, som bevarar hanteringen av äldre missar även vid återställning av just kalenderposten.
 
-Virtuella överhoppningar använder `activity_skip` i den befintliga händelsetabellen. Ingen ny tillståndstabell eller administrativ kö införs. Läsning skapar inte schema, tabeller eller migrationsskrivningar. Gamla verkliga avslut, avbokningar och ombokningar bevaras. Historiska snooze-/dismiss-/permissionbeslut ignoreras operativt. Legacy-ID:n kan överbryggas med unik kund + källtidsstämpel; tvetydiga eller felkopplade historiska poster isoleras och blockerar inte portföljen.
+Endast verkliga kalenderaktiviteter kan hoppas över. Ingen ny tillståndstabell eller administrativ kö införs. Läsning skapar inte schema, tabeller eller migrationsskrivningar. Gamla verkliga avslut, avbokningar och ombokningar bevaras. Historiska snooze-/dismiss-/permissionbeslut ignoreras operativt. Uppföljningsidentiteten är `calendar:<planned_activity_id>`, även när en äldre kalenderpost har ett lagrat legacy-ID; tvetydiga eller felkopplade historiska poster isoleras.
 
 Aktivitetskontraktet är `customer-activity-v1` i projektion och cacheidentitet. Ruttens rankingkontrakt är `v35-priority-lexicographic-activity-1`; det ändrar inte ruttmålets kommersiella vikter. Signeringssalt för nya ruttförhandsvisningar har bytts. Gamla signerade förhandsvisningar och cachade ruttkontrakt avvisas. Planeringsfingeravtryck omfattar de nya tidsstämplarna. Skrivinvalidering och UI:s serialkontroller för sena svar behålls.
 
@@ -63,12 +64,12 @@ Den nya kontraktssviten `test_customer_activity_loop.py` och de uppdaterade foku
 | 4–10, 27–28, 44–46 | Kontaktresultat, verklig tid, sen registrering, upprepad DST-timme, tekniska mejl/importer, en logg per kontakt |
 | 11–19, 29–33 | Beslutstid, ny miss, flera framtida bokningar, senaste/äldre/future skip, restore, note edit, avbokning, datum utan bokningstid |
 | 22–26 | Inerta gamla händelser och planeringsförslag; 410 utan mutation; direkt completed avvisas |
-| 13, 34–36 | Partiell uppföljning, kontakttimeout efter append, adapteråterhämtning, befintliga samtidighets- och revisionstester |
+| 13, 34–36 | Partiell uppföljning, kontakttimeout efter append, HTTP 410 för avvecklad adapter, befintliga samtidighets- och revisionstester |
 | 37–39, 41 | PR #50:s ruttkoordinering, route_pending, återläsning, stale preview, gamla kontrakt, borttagen kund med aktiv cache |
 | 47–48 | JS-kontrakt och faktiska browserflöden med sena svar/fel; dataläsfel ger 503, inte tom arbetslista |
 | Gemensamt konsumentkontrakt | Kalender/attention/next follow-up samt real snapshot genom mejlbeslut och båda ruttmotorerna utan ersatt miss som blockerare |
 
-Lokal verifiering: 1 139 backendtester och 123 rottester; Python-kompilering och `git diff --check`. Exakt verifierad PR-head och CI-status anges i PR-beskrivningen.
+PR5:s senast verifierade fulla CI-körning före denna dokumentationskorrigering: 1 106 web-app-tester, 104 rottester och 39 frontendkontraktstester; därtill Python-kompilering, `git diff --check` samt desktop-/mobil- och kalender-/rutt-/prioriteringsregressioner. Den aktuella PR-headens CI-status finns i GitHub Actions.
 
 Browserkontroller använder faktiska lokala Flask-harnessar med syntetiska Sheets och ersatt extern transport. Täckningen omfattar ny loop i mobil/desktop, säljuppföljning i mobil/desktop, vägledning vid 320/390/1440 px, ruttens misslyckade aktivering och återförsök samt drag-and-drop/touch med sena svar, konflikter och återställning. Inga verkliga mejl skickas.
 
